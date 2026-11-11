@@ -1,0 +1,504 @@
+# Instrucciones de Gestión de Proyecto
+
+## Identidad del Agente
+
+Al iniciar, determina tu identidad ejecutando:
+  echo $CLAUDE_CONFIG_DIR
+
+- Si termina en `.claude` → eres el **Agente 1** (principal)
+- Si termina en `.claude2` → eres el **Agente 2** (relevo)
+
+Esta identidad se usa para mantener el archivo de relay correctamente.
+
+## Sistema de Relay entre Agentes
+
+El archivo `.gestor/memoria-compartida.md` es el canal de continuidad entre agentes.
+Por defecto, el Agente 1 es el principal.
+
+### Al iniciar cualquier sesión:
+1. Lee `.gestor/memoria-compartida.md`
+2. Si el campo `Tarea en curso` es `sí`:
+   - Retoma exactamente donde se dejó, sin preguntar al usuario
+   - Anuncia brevemente: "Retomando tarea: [nombre de la tarea]"
+3. Si no hay tarea activa, inicia normalmente
+
+### Durante el trabajo:
+Actualiza `.gestor/memoria-compartida.md` en cada hito relevante con:
+- Qué se está haciendo y por qué
+- Exactamente cuál es el próximo paso
+- Qué archivos están modificados o pendientes
+- Cualquier decisión que el agente de relevo necesite conocer
+
+### Al acercarse al límite de uso o al finalizar:
+Deja el archivo en estado "completo": el próximo agente debe poder arrancar sin dudas.
+Si detectas que te acercas al límite, avisa al usuario y escribe el estado final.
+
+### Formato del archivo `.gestor/memoria-compartida.md`:
+
+```
+# Memoria de Trabajo — Relay de Agentes
+
+## Estado del Relay
+- **Agente activo**: [Agente 1 / Agente 2 / Ninguno]
+- **Última actualización**: [YYYY-MM-DD HH:MM]
+- **Tarea en curso**: [sí / no]
+
+## Tarea Actual
+### Objetivo
+[Descripción completa de qué se está construyendo o resolviendo]
+
+### Contexto y decisiones tomadas
+[Por qué se eligió este enfoque; decisiones que el relevo debe respetar]
+
+### Próximo paso exacto
+[La siguiente acción concreta a ejecutar, sin ambigüedad]
+
+### Archivos relevantes
+- `ruta/archivo.ext` — [estado: modificado / pendiente / en revisión]
+
+## Log de sesión
+- [HH:MM] [Agente X] — [qué se hizo]
+```
+
+## Herramientas y Extensiones Disponibles
+
+Los agentes deben consultar activamente el siguiente marketplace de herramientas para Claude Code antes de comenzar trabajo en un proyecto nuevo o cuando se enfrenten a una tarea que podría beneficiarse de herramientas especializadas:
+
+**URL del marketplace:** https://claudemarketplaces.com/marketplaces
+
+Este directorio comunitario agrega más de 2.500 repositorios y herramientas organizados en categorías como:
+- **MCP Servers** (`/mcp`): servidores de Model Context Protocol que amplían el contexto y las capacidades del agente
+- **Skills** (`/skills`): skills curadas para Claude Code listas para instalar
+- **Agentes IA & Orquestación**: herramientas para flujos multi-agente
+- **Herramientas de desarrollo**: utilidades para análisis de código, testing, DevOps
+- **Integraciones LLM**: conectores con servicios y APIs externas
+- **Seguridad & Compliance**: herramientas de auditoría y análisis de seguridad
+
+### Cuándo consultar el marketplace
+
+1. **Al iniciar trabajo en un proyecto nuevo**: explorar si existe algún MCP server o skill que sea relevante para las tecnologías del proyecto (ej: MCP para bases de datos, para el lenguaje usado, para servicios externos integrados)
+2. **Antes de implementar una integración con un servicio externo**: verificar si ya existe un MCP server o herramienta que lo resuelva
+3. **Cuando se necesite ampliar capacidades**: búsqueda de información en la web, acceso a documentación oficial, automatización de flujos, análisis de repositorios, etc.
+4. **Al detectar una carencia de herramientas**: si una tarea requiere algo que el agente no puede hacer de forma nativa, buscar en el marketplace antes de construir una solución propia
+
+### Protocolo de uso
+
+1. Visita https://claudemarketplaces.com/marketplaces con `WebFetch`
+2. Identifica herramientas relevantes para la tarea o proyecto en curso
+3. Si encuentras alguna útil, **informa al usuario** indicando: nombre de la herramienta, qué hace, y cómo instalarla o activarla
+4. No instales ni configures herramientas automáticamente sin confirmación del usuario
+5. Prioriza herramientas con respaldo de Anthropic o repositorios con alta reputación (estrellas, mantenimiento activo)
+
+> **Nota de seguridad**: Antes de recomendar cualquier herramienta del marketplace, verifica que el repositorio sea legítimo y activo. El marketplace es comunitario y no está afiliado oficialmente a Anthropic. Aplica el principio de mínimo privilegio al evaluar los permisos que solicita cada herramienta.
+
+## Inicio de Sesión
+
+Al comenzar cada sesión:
+
+1. Lee `.gestor/control.md` si existe para retomar el contexto del proyecto
+2. Si `.gestor/control.md` **NO existe**, significa que es la primera sesión gestionada. Debes:
+   - Explorar la estructura completa del proyecto (carpetas, archivos principales)
+   - Leer README.md, docs/, y cualquier documentación existente
+   - Analizar el código fuente para entender la arquitectura, tecnologías y patrones usados
+   - Identificar tareas pendientes (TODOs en el código, issues, etc.)
+   - Crear `.gestor/control.md` con toda la información recopilada (ver estructura abajo)
+   - Crear la estructura de documentación inicial (ver sección Documentación)
+3. Anuncia el estado del canal Gemini: lee `.gestor/gemini/canal.md` e informa al usuario:
+   - Estado `libre` → "Gemini disponible y listo."
+   - Estado `completado` → "Gemini tiene una respuesta pendiente de procesar."
+   - Estado `pendiente` o `ejecutando` → "Hay una tarea activa para Gemini."
+   - Si el archivo no existe → "Canal Gemini no inicializado en este proyecto."
+4. Presenta un breve resumen del estado del proyecto antes de comenzar a trabajar
+
+## Archivo de Control (.gestor/control.md)
+
+Mantén este archivo siempre actualizado con la siguiente estructura:
+
+### Descripción del Proyecto
+- Qué hace el proyecto, su propósito y objetivo principal
+- Tecnologías y frameworks utilizados
+- Cómo ejecutar, compilar o desplegar el proyecto
+
+### Estado Actual
+- En qué punto se encuentra el desarrollo
+- Qué funciona y qué falta por implementar
+
+### Historial de Sesiones
+- Fecha y hora de cada sesión
+- Resumen concreto de los cambios realizados
+
+### Tareas Pendientes
+- Lista priorizada de tareas por completar
+- Bugs conocidos por resolver
+
+### Arquitectura y Decisiones
+- Estructura del proyecto y organización del código
+- Decisiones técnicas importantes y su justificación
+- Dependencias clave
+
+### Notas y Contexto
+- Información relevante para futuras sesiones
+- Advertencias o precauciones especiales
+
+## Documentación del Proyecto
+
+Mantén una carpeta `documentation/` en la raíz del proyecto con documentación exhaustiva y siempre actualizada. El objetivo es que cualquier persona (o herramienta como NotebookLM) pueda leer esta documentación y obtener una comprensión total del proyecto: qué hace, cómo funciona, cómo usarlo y cómo reproducirlo desde cero en otro equipo.
+
+### Estructura de la carpeta documentation/
+
+```
+documentation/
+├── README.md               # Índice general y descripción del proyecto
+├── features.md             # Funcionalidades completas con detalle de uso
+├── usage.md                # Manual de uso para el usuario final
+├── architecture.md         # Arquitectura del software, patrones y decisiones
+├── changelog.md            # Historial de cambios por versión/sesión
+└── infrastructure/         # Todo lo necesario para clonar el proyecto completo
+    ├── overview.md         # Visión general de la infraestructura
+    ├── requirements.md     # Dependencias, versiones y requisitos del sistema
+    ├── services.md         # Servicios externos, APIs y sus configuraciones
+    ├── docker.md           # Configuración Docker/Docker Compose (si aplica)
+    ├── clone-guide.md      # Guía paso a paso para reproducir el entorno completo
+    ├── setup.ps1           # Script de instalación automática (Windows/PowerShell)
+    └── setup.sh            # Script de instalación automática (Linux/macOS)
+```
+
+### Contenido mínimo exigido
+
+**documentation/README.md**
+- Descripción clara del propósito del proyecto
+- Tecnologías principales usadas
+- Instrucciones básicas de instalación y arranque
+- Enlace al resto de documentos
+
+**documentation/features.md**
+- Lista exhaustiva de todas las funcionalidades
+- Para cada funcionalidad: descripción, comportamiento esperado, casos de uso
+- Capturas o diagramas si ayudan a la comprensión
+
+**documentation/usage.md**
+- Manual de usuario completo
+- Flujos de trabajo habituales paso a paso
+- Configuraciones disponibles y cómo modificarlas
+
+**documentation/architecture.md**
+- Diagrama o descripción de la arquitectura general
+- Módulos, servicios y cómo se comunican entre sí
+- Decisiones técnicas relevantes y por qué se tomaron
+- Estructura de carpetas comentada
+
+**documentation/changelog.md**
+- Registro de cambios organizado por fecha/versión
+- Actualizar al final de cada sesión
+
+**documentation/infrastructure/overview.md**
+- Mapa completo de todos los componentes del sistema
+- Qué ejecuta en local, qué en la nube, qué en Docker
+- Variables de entorno necesarias y su propósito
+
+**documentation/infrastructure/requirements.md**
+- Sistema operativo y versión mínima
+- Lenguaje y versión exacta (Node 20, Python 3.11, .NET 9, etc.)
+- Herramientas necesarias (Docker, Git, npm, etc.) con versiones
+- Cuentas o accesos externos necesarios
+
+**documentation/infrastructure/services.md**
+- Cada servicio externo o API conectada al proyecto
+- Para cada uno: nombre, propósito, URL, tipo de autenticación, variables de entorno
+- Cómo obtener las credenciales o configurarlos
+
+**documentation/infrastructure/docker.md** (si el proyecto usa Docker)
+- Explicación de cada contenedor y su función
+- Variables de entorno del docker-compose
+- Volúmenes, redes y puertos expuestos
+- Comandos habituales de gestión
+
+**documentation/infrastructure/clone-guide.md**
+- Guía completa, paso a paso, para reproducir el proyecto desde cero en un equipo nuevo
+- Debe cubrir: instalar dependencias, clonar repositorio, configurar variables de entorno, levantar servicios, verificar que funciona
+- Debe ser ejecutable por alguien que no conoce el proyecto
+
+**documentation/infrastructure/setup.ps1 / setup.sh**
+- Script que automatiza la instalación de todo lo necesario
+- Debe: verificar/instalar dependencias, clonar repos si procede, crear archivos .env desde plantillas, levantar servicios
+- Incluir mensajes claros de progreso y errores
+- Probar que funciona antes de declararlo completo
+
+### Cuándo actualizar la documentación
+
+- **Al final de cada sesión**: actualiza changelog.md y cualquier documento afectado por los cambios realizados
+- **Al añadir funcionalidades**: actualiza features.md, usage.md y architecture.md
+- **Al añadir servicios o dependencias**: actualiza requirements.md, services.md, clone-guide.md y setup.ps1
+- **Al cambiar la arquitectura**: actualiza architecture.md y overview.md
+
+La documentación debe estar siempre en sincronía con el código. Una documentación desactualizada es peor que ninguna.
+
+## Estándares de Código y Buenas Prácticas
+
+Estas normas son **obligatorias** en todo proyecto. Aplícalas siempre al escribir código nuevo o al modificar código existente.
+
+### 1. Principios SOLID
+
+Aplica los cinco principios SOLID en todo código orientado a objetos o modular:
+
+- **S — Responsabilidad Única (SRP)**: Cada clase, función o módulo debe tener una sola razón para cambiar. No mezcles lógica de negocio con lógica de presentación, acceso a datos o manejo de errores en la misma unidad.
+- **O — Abierto/Cerrado (OCP)**: Las entidades de software deben estar abiertas a extensión pero cerradas a modificación. Usa interfaces, herencia o composición para añadir comportamiento sin alterar código existente.
+- **L — Sustitución de Liskov (LSP)**: Las clases derivadas deben poder sustituir a sus clases base sin alterar el comportamiento esperado del programa.
+- **I — Segregación de Interfaces (ISP)**: No obligues a una clase a implementar métodos que no necesita. Prefiere interfaces pequeñas y específicas a interfaces grandes y genéricas.
+- **D — Inversión de Dependencias (DIP)**: Los módulos de alto nivel no deben depender de módulos de bajo nivel; ambos deben depender de abstracciones. Inyecta dependencias en lugar de instanciarlas internamente.
+
+### 2. Clean Code
+
+- **Nombres descriptivos**: Variables, funciones, clases y archivos deben tener nombres claros que revelen su intención. Evita abreviaciones crípticas (`calcTtlPrc` → `calcularPrecioTotal`). Los nombres deben poder leerse y entenderse sin contexto adicional.
+- **Funciones pequeñas y atómicas**: Cada función debe hacer una sola cosa, hacerla bien y ser la única que la hace. Si una función supera las 20-30 líneas, evalúa si puede descomponerse.
+- **DRY (Don't Repeat Yourself)**: No dupliques lógica. Si el mismo bloque de código aparece en dos o más lugares, extráelo a una función, utilidad o servicio reutilizable.
+- **KISS (Keep It Simple, Stupid)**: Elige siempre la solución más simple que resuelva el problema. No añadas complejidad innecesaria ni abstracciones prematuras.
+- **YAGNI (You Aren't Gonna Need It)**: No implementes funcionalidad que no se necesita ahora. No diseñes para requisitos hipotéticos futuros.
+- **Evita números mágicos**: Usa constantes con nombre descriptivo en lugar de valores literales sueltos en el código (`const INTENTOS_MAXIMOS = 3` en vez de un `3` perdido).
+- **Early return**: Usa retornos tempranos para evitar anidamiento excesivo de condicionales. Maneja primero los casos de error o las condiciones de salida.
+- **Inmutabilidad cuando sea posible**: Prefiere variables inmutables (`const`, `readonly`, `final`) salvo que haya una razón explícita para mutar.
+
+### 3. Manejo Centralizado de Errores
+
+- Implementa un sistema de manejo de errores centralizado en cada proyecto. No disperses `try-catch` con respuestas genéricas por todo el código.
+- Crea clases de error personalizadas que hereden del error base del lenguaje (ej: `AppError extends Error` con código, mensaje y nivel de severidad).
+- Los errores deben propagarse hacia arriba de forma controlada. Las capas internas lanzan excepciones tipadas; las capas externas (controladores, middleware) las capturan y formatean la respuesta.
+- Registra los errores con suficiente contexto para poder depurarlos (timestamp, origen, datos relevantes, stack trace).
+
+### 4. Validación de Entradas
+
+- Valida **siempre** los datos en los límites del sistema: entrada de usuario, peticiones HTTP, datos externos de APIs, lectura de archivos.
+- Usa librerías de validación de esquemas cuando estén disponibles (Zod, Joi, FluentValidation, Pydantic, etc.) en lugar de validación manual.
+- Centraliza la validación en middleware o decoradores reutilizables. No repitas la misma validación en múltiples controladores o funciones.
+- Aplica el principio de **fail fast**: rechaza datos inválidos lo antes posible, antes de que entren en la lógica de negocio.
+
+### 5. Seguridad en el Código
+
+- **Nunca hardcodees secretos** (contraseñas, tokens, claves API) en el código fuente. Usa variables de entorno, gestores de secretos o archivos `.env` (excluidos del repositorio).
+- **Sanitiza todas las entradas** para prevenir inyecciones (SQL injection, XSS, command injection, path traversal).
+- **Principio de mínimo privilegio**: cada componente, usuario o proceso debe tener solo los permisos estrictamente necesarios.
+- **Parametriza las consultas a base de datos**: nunca concatenes cadenas para construir queries. Usa consultas parametrizadas o un ORM.
+- Mantén las dependencias actualizadas y revisa las vulnerabilidades conocidas periódicamente.
+
+### 6. Documentación del Código (Obligatoria)
+
+Todo el código debe estar documentado **en español** con detalle suficiente para que cualquier desarrollador pueda entenderlo sin necesidad de leer la implementación completa. Esto es obligatorio, no opcional.
+
+#### Qué documentar:
+
+- **Cada clase**: Propósito, responsabilidad, relaciones con otras clases, y ejemplo de uso si no es trivial.
+- **Cada función/método público**: Descripción de qué hace, parámetros (tipo y propósito de cada uno), valor de retorno, excepciones que puede lanzar, y efectos secundarios si los tiene.
+- **Cada interfaz/contrato**: Propósito del contrato, cuándo y por qué implementarlo.
+- **Bloques de lógica compleja**: Si un algoritmo o secuencia de operaciones no es obvio, explica el razonamiento paso a paso.
+- **Constantes y enumeraciones**: Explica qué representan y por qué existen esos valores.
+- **Archivos de configuración**: Documenta cada opción relevante.
+
+#### Formato por lenguaje:
+
+- **C# / .NET**: Usa XML docs (`/// <summary>`, `/// <param>`, `/// <returns>`, `/// <exception>`)
+- **TypeScript / JavaScript**: Usa JSDoc (`/** @description`, `@param`, `@returns`, `@throws`, `@example`)
+- **Python**: Usa docstrings con formato Google o NumPy (`"""Descripción.\n\nArgs:\n    param: Descripción"""`).
+- **Otros lenguajes**: Usa el estándar de documentación nativo del lenguaje.
+
+#### Ejemplo en C#:
+```csharp
+/// <summary>
+/// Calcula el precio total de una subasta incluyendo comisiones e impuestos.
+/// Aplica la comisión de plataforma y el IVA vigente sobre el precio de adjudicación.
+/// </summary>
+/// <param name="precioAdjudicacion">Precio final de adjudicación en euros (debe ser mayor que 0).</param>
+/// <param name="porcentajeComision">Porcentaje de comisión de la plataforma (entre 0 y 100).</param>
+/// <returns>El precio total con comisiones e impuestos incluidos.</returns>
+/// <exception cref="ArgumentOutOfRangeException">Si el precio o la comisión están fuera de rango.</exception>
+public decimal CalcularPrecioTotal(decimal precioAdjudicacion, decimal porcentajeComision)
+```
+
+#### Ejemplo en TypeScript:
+```typescript
+/**
+ * Calcula el precio total de una subasta incluyendo comisiones e impuestos.
+ * Aplica la comisión de plataforma y el IVA vigente sobre el precio de adjudicación.
+ *
+ * @param precioAdjudicacion - Precio final de adjudicación en euros (debe ser mayor que 0)
+ * @param porcentajeComision - Porcentaje de comisión de la plataforma (entre 0 y 100)
+ * @returns El precio total con comisiones e impuestos incluidos
+ * @throws {RangeError} Si el precio o la comisión están fuera de rango
+ *
+ * @example
+ * const total = calcularPrecioTotal(150000, 5); // 165375.00 (con 5% comisión + 21% IVA)
+ */
+function calcularPrecioTotal(precioAdjudicacion: number, porcentajeComision: number): number
+```
+
+### 7. Organización y Arquitectura del Código
+
+- **Separación de capas**: Mantén siempre separadas las capas de presentación (UI), lógica de negocio (servicios/dominio), y acceso a datos (repositorios/DAL). Nunca accedas a la base de datos directamente desde un controlador o componente visual.
+- **Estructura de carpetas coherente**: Organiza el código de manera predecible. Agrupa por funcionalidad o por capa según convenga al proyecto, pero sé consistente.
+- **Un archivo, una responsabilidad**: Cada archivo debe contener una sola clase, componente o módulo lógico. Evita archivos "cajón de sastre" con múltiples clases o funciones inconexas.
+- **Separar configuración de código**: Las cadenas de conexión, URLs de servicios, flags de feature, etc. deben estar en archivos de configuración o variables de entorno, nunca embebidas en el código.
+
+### 8. Tipado Fuerte y Type Safety
+
+- Usa tipado fuerte siempre que el lenguaje lo permita. En TypeScript, evita `any` salvo que sea absolutamente inevitable (y documéntalo). En C#, evita `dynamic` y `object` cuando puedas usar genéricos o interfaces.
+- Define interfaces y tipos estrictos para los contratos de datos: DTOs, props de componentes, respuestas de API, entidades de dominio.
+- Si el backend no usa tipado fuerte (JavaScript puro), aplica **Type Hinting via JSDoc** (`/** @type {User} */`, `/** @param {string} id */`) para activar el soporte del editor y prevenir errores.
+
+### 9. Refactorización y Mejora Continua
+
+Cuando trabajes con código existente:
+
+- **Regla del Boy Scout**: Deja el código un poco mejor de como lo encontraste. Si tocas una función y ves un nombre críptico, renómbralo. Si hay código duplicado cerca, extráelo.
+- **Refactoriza en pasos pequeños**: No reescribas archivos enteros de golpe. Haz cambios incrementales, verificando que todo sigue funcionando después de cada paso.
+- **Extrae antes de añadir**: Si necesitas añadir funcionalidad a una función que ya es grande, primero extrae la lógica existente en funciones más pequeñas, y luego añade lo nuevo.
+- **Identifica y elimina código muerto**: Elimina funciones, variables, imports y archivos que ya no se usen. El código muerto genera confusión y aumenta la carga cognitiva.
+- **Reduce la complejidad ciclomática**: Si una función tiene demasiados caminos (if/else/switch anidados), descompónla en funciones auxiliares, usa polimorfismo o tablas de lookup.
+
+### 10. Testing y Verificabilidad
+
+- Escribe código que sea fácil de testear: funciones puras sin efectos secundarios, inyección de dependencias, interfaces para mockear.
+- Cuando se añaden funcionalidades nuevas, incluye tests unitarios para la lógica de negocio si el proyecto tiene framework de testing configurado.
+- Si el proyecto no tiene tests y no se pide explícitamente crearlos, al menos estructura el código de forma que sea testeable en el futuro.
+
+### 11. Control de Rendimiento
+
+- **Evita operaciones bloqueantes**: En entornos asíncronos (Node.js, C# async), nunca bloquees el hilo principal con operaciones síncronas pesadas (lectura de archivos grandes, criptografía, generación de PDFs). Usa alternativas asíncronas o workers/hilos secundarios.
+- **Consultas eficientes a base de datos**: Añade índices a columnas frecuentemente consultadas. Evita N+1 queries. Usa paginación para conjuntos de datos grandes.
+- **Connection pooling**: Siempre que se use una base de datos, configura un pool de conexiones en lugar de abrir/cerrar conexiones individuales por petición.
+- **Carga diferida (lazy loading)**: Carga datos y recursos solo cuando se necesiten, no de forma anticipada si no es necesario.
+
+## Scripts de Clonado y Configuración del Entorno
+
+Todo proyecto **debe incluir** scripts de configuración automática que permitan reproducir el entorno de desarrollo completo desde cero en un equipo nuevo.
+
+### Reglas:
+
+1. **Ambas plataformas siempre**: Incluye tanto `setup.ps1` (Windows/PowerShell) como `setup.sh` (Linux/macOS), **salvo** que el proyecto sea de uso exclusivo en un sistema operativo específico (ej: una app WPF solo necesita `setup.ps1`).
+2. **Ubicación**: `documentation/infrastructure/setup.ps1` y `documentation/infrastructure/setup.sh`
+3. **Contenido mínimo** de cada script:
+   - Verificar requisitos del sistema (versión del SO, runtime del lenguaje, herramientas necesarias)
+   - Instalar dependencias del proyecto (paquetes, librerías, NuGet, npm, pip, etc.)
+   - Configurar variables de entorno necesarias (o crear un `.env` plantilla)
+   - Crear bases de datos y ejecutar migraciones si aplica
+   - Compilar/construir el proyecto si es necesario
+   - Mostrar instrucciones finales para arrancar la aplicación
+4. **Idempotencia**: Los scripts deben ser seguros de ejecutar múltiples veces sin causar errores ni duplicar configuraciones.
+5. **Documentar cada paso**: Cada sección del script debe tener comentarios claros en español explicando qué hace y por qué.
+
+### Ejemplo de estructura:
+```powershell
+# setup.ps1 — Script de configuración del entorno para Windows
+# Proyecto: [Nombre del proyecto]
+# Requisitos: Windows 10+, PowerShell 5.1+
+
+Write-Host "=== Configuración del entorno ===" -ForegroundColor Cyan
+
+# 1. Verificar requisitos del sistema
+Write-Host "Verificando requisitos..." -ForegroundColor Yellow
+# [verificaciones]
+
+# 2. Instalar dependencias
+Write-Host "Instalando dependencias..." -ForegroundColor Yellow
+# [instalaciones]
+
+# 3. Configurar variables de entorno
+Write-Host "Configurando entorno..." -ForegroundColor Yellow
+# [configuración]
+
+# 4. Construir el proyecto
+Write-Host "Compilando proyecto..." -ForegroundColor Yellow
+# [build]
+
+Write-Host "=== Configuración completada ===" -ForegroundColor Green
+Write-Host "Para iniciar la aplicación: [instrucciones]"
+```
+
+## Canal de Comunicación con Gemini
+
+Tienes acceso a un colaborador autónomo llamado **Gemini**, que se ejecuta en **Google Antigravity** en paralelo a tu sesión. Gemini puede realizar tareas por ti para que ahorres tokens y tiempo: búsquedas web, investigación, descargas, tests de endpoints, ejecución de comandos de terminal, y más.
+
+El canal de comunicación es el archivo `.gestor/gemini/canal.md` de este proyecto. Eres tú (Claude Code) quien controla cuándo Gemini responde: escribes la tarea, y cuando necesitas el resultado, lees el canal para ver si está disponible.
+
+### Cuándo delegar a Gemini (obligatorio)
+
+| Situación | Delega a Gemini |
+|-----------|-----------------|
+| Necesitas buscar documentación, APIs o librerías | Sí — `busqueda_web` o `investigacion` |
+| Necesitas descargar un archivo, asset o dependencia | Sí — `descarga` |
+| Quieres verificar que un endpoint o URL responde | Sí — `test_web` |
+| Necesitas ejecutar un comando de build, migración o instalación | Sí — `terminal` |
+| Necesitas navegar una web y realizar acciones | Sí — `navegacion` |
+| Necesitas generar texto, documentación o contenido extenso | Sí — `texto` |
+| La tarea consume muchos tokens pero Gemini puede hacerla | Sí — el tipo que corresponda |
+| La tarea requiere razonamiento sobre el código del proyecto | No — hazla tú |
+| La tarea requiere decisiones de arquitectura o diseño | No — hazla tú |
+
+### Cómo escribir una tarea en canal.md
+
+Escribe exactamente este formato en `.gestor/gemini/canal.md`:
+
+```
+## TAREA ACTIVA
+
+**ID**: [un identificador único, ej: TASK-001]
+**Timestamp**: [YYYY-MM-DD HH:MM:SS]
+**De**: Agente [1 o 2]
+**Para**: Gemini
+**Estado**: pendiente
+
+### Tipo de tarea
+[busqueda_web / investigacion / descarga / codigo / test_web / navegacion / analisis / terminal / texto]
+
+### Solicitud
+[Descripción clara y completa de lo que necesitas]
+
+### Contexto
+[Información adicional que Gemini necesita: rutas de archivos, versiones, restricciones, etc.]
+
+### Respuesta esperada
+[Qué formato o contenido esperas recibir]
+
+---
+
+## RESPUESTA DE GEMINI
+
+**ID respuesta**: [vacío]
+**Timestamp respuesta**: [vacío]
+**Estado**: [vacío]
+
+### Resultado
+
+[Sin respuesta]
+
+### Archivos generados (si aplica)
+[vacío]
+```
+
+### Ciclo de delegación
+
+1. Escribe la tarea con estado `pendiente` en `canal.md`
+2. Continúa trabajando en otras cosas mientras Gemini ejecuta
+3. Cuando el estado cambie a `completado`, lee el resultado en `## RESPUESTA DE GEMINI`
+4. Añade una fila al final de la tabla en `historico.md` con: ID, timestamp, tipo, resumen, estado y duración
+5. Resetea `canal.md` a estado limpio: estado `libre`, campos en `[vacío]`, resultado en `[Sin respuesta]`
+6. **Nunca acumules historial en `canal.md`** — solo en `historico.md`
+
+### Estructura de archivos Gemini
+
+- `GEMINI.md` — instrucciones de sistema para Gemini. Antigravity lo carga automáticamente al abrir el proyecto (no modificar salvo actualización del sistema).
+- `.gestor/gemini/canal.md` — canal activo: solo contiene la tarea en curso y la respuesta. Debe mantenerse limpio.
+- `.gestor/gemini/historico.md` — registro permanente de todas las tareas completadas o con error.
+
+## Fin de Sesión
+
+Antes de cerrar la sesión, **detén todos los procesos activos** relacionados con el proyecto:
+- Servidores de desarrollo (Node, Python, .NET, etc.)
+- Watchers, compiladores en modo watch, hot-reload
+- Contenedores Docker iniciados durante la sesión
+- Cualquier proceso en segundo plano lanzado para el proyecto
+
+Usa los comandos apropiados (`Ctrl+C`, `docker compose down`, `kill`, `taskkill`, etc.) para asegurarte de que no quedan procesos huérfanos consumiendo recursos tras cerrar la sesión.
+
+Al finalizar cada sesión, actualiza:
+- `.gestor/control.md`: añadir al historial, actualizar estado y tareas pendientes
+- `documentation/changelog.md`: registrar los cambios de esta sesión
+- Cualquier otro documento de `documentation/` afectado por los cambios realizados

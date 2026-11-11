@@ -1,0 +1,5 @@
+# Paquete portable generado por documentation/infrastructure/build-portable.ps1 o build-portable.sh.
+portable/
+
+# Salidas de compilación de Rust (Cargo.lock sí se versiona: el producto es un binario).
+/target/

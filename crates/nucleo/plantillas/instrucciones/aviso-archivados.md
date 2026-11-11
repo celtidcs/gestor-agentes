@@ -1,0 +1,1 @@
+Gestor Agentes ha llevado al archivo estos archivos del sistema de trabajo anterior. Quien consolide este bloque mira si alguno guarda una tarea viva y, si es así, la traslada a su diario y a .gestor/canal/estado.md:

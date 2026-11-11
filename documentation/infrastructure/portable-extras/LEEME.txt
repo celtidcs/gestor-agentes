@@ -1,0 +1,61 @@
+Gestor Agentes 3.0.0, versión portable
+
+Gestor Agentes guarda la lista de tus proyectos de programación y los abre con un agente de inteligencia artificial: Claude Code, Codex, Gemini o Programator, con tantas cuentas de cada uno como tengas. Antes se llamaba Gestor Claude.
+
+Es portable, así que no se instala. Puedes copiar esta carpeta entera a una memoria USB o a otro ordenador y usarla directamente. Tu configuración viaja con ella, dentro de la carpeta datos.
+
+
+Para empezar en Windows
+
+Haz doble clic en gestor-agentes.exe.
+
+La primera vez, Windows puede mostrar un aviso azul que dice que ha protegido tu equipo. Sale con cualquier programa que no lleva firma digital. Pulsa en Más información y después en Ejecutar de todas formas.
+
+
+Para empezar en Linux
+
+Abre una terminal en esta carpeta y escribe ./gestor-agentes. Si dice que no tiene permiso, dáselo una sola vez con la orden chmod +x gestor-agentes.
+
+
+Después, en los dos sistemas
+
+Pulsa el botón Agregar Proyecto y elige la carpeta principal de un proyecto tuyo. Selecciónalo en la lista con un clic y pulsa el botón del agente con el que quieras trabajar, por ejemplo Abrir · Claude 1. Se abrirá una ventana de terminal con el agente ya en marcha dentro de la carpeta del proyecto.
+
+Si en este ordenador habías usado Gestor Claude, la primera vez que abras Gestor Agentes, si su carpeta datos todavía no tiene tu lista de proyectos ni tus perfiles, copiará allí tu lista de proyectos y tus perfiles de agente, y te dirá qué ha copiado. La configuración antigua no se borra.
+
+
+Qué necesitas en el ordenador
+
+Windows 10 u 11 de 64 bits, o Linux de 64 bits con escritorio gráfico. La ventana del programa necesita OpenGL 2.0 o superior, que proporciona el controlador de la tarjeta gráfica. Algunas máquinas virtuales no lo tienen, y en ellas el programa avisa de que falta OpenGL y no se abre. En Windows se arregla instalando el complemento gratuito de Microsoft OpenCL, OpenGL, and Vulkan Compatibility Pack, de la Microsoft Store; el documento Resolucion de problemas lo explica.
+
+Al menos uno de los agentes, porque son programas aparte y este no los incluye. Gestor Agentes solo muestra el botón de los agentes que encuentra instalados; si no encuentra ninguno, la lista funciona igual, pero no aparece ningún botón para abrir. El Manual de uso explica cómo instalar cada agente con el método oficial de su fabricante.
+
+Git, para que el programa pueda crear el repositorio de los proyectos que no lo tienen. Sin git todo lo demás funciona, y el programa te lo avisa.
+
+No hace falta ningún otro componente: el ejecutable lleva dentro todo lo que necesita.
+
+
+Qué hay en esta carpeta
+
+El programa es gestor-agentes.exe en Windows, o gestor-agentes en Linux.
+
+La carpeta datos guarda tu configuración: la lista de proyectos, los perfiles de agente y dos ajustes. La crea y la rellena el programa. No la borres si quieres conservarla.
+
+La carpeta documentacion tiene tres documentos. Manual de uso explica todo el programa paso a paso y es el que conviene leer primero. Resolucion de problemas recoge lo que suele salir mal y cómo arreglarlo. Referencia de funcionalidades describe con detalle técnico todo lo que hace el programa.
+
+
+Llevártelo a otro ordenador
+
+Copia esta carpeta entera, con datos dentro, y ya está. Tus perfiles de agente funcionarán igual. La lista de proyectos guarda rutas de carpetas, así que solo sirve tal cual si los proyectos están en la misma ruta en los dos equipos, por ejemplo en una unidad compartida que se monta con la misma letra. Si no, quita de la lista los que no se puedan abrir y añade los de ese equipo.
+
+Si prefieres empezar de cero en el otro ordenador, copia la carpeta sin el contenido de datos.
+
+
+Si algo no funciona
+
+Abre el documento Resolucion de problemas, en la carpeta documentacion. Ahí están los fallos más habituales y cómo resolver cada uno.
+
+
+Desinstalar
+
+No hay nada que desinstalar. Borra esta carpeta y listo; con ella se va tu configuración. Tus proyectos no se tocan.

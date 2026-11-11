@@ -1,0 +1,13 @@
+[package]
+name = "lanzador"
+description = "Plan y ejecución de la apertura de cada agente (Claude, Codex, Gemini y Programator) en Windows y Linux."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = "2"

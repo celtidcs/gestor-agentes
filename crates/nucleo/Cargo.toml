@@ -1,0 +1,16 @@
+[package]
+name = "nucleo"
+description = "Lógica de Gestor Agentes: instrucciones de los proyectos, estructura de .gestor/, git y configuración portable."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"

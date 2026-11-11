@@ -1,0 +1,27 @@
+[package]
+name = "gestor-agentes"
+description = "Gestor Agentes: abre los proyectos con Claude, Codex, Gemini o Programator y los prepara para el trabajo coordinado."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+nucleo = { path = "../nucleo" }
+lanzador = { path = "../lanzador" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+thiserror = "2"
+# Ventana: eframe sin funciones por defecto, con el motor glow, las fuentes incluidas, X11 y
+# Wayland en Linux y accesibilidad (AccessKit).
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "x11", "wayland", "accesskit"] }
+# Selector de carpetas y diálogo de error del sistema.
+rfd = "0.18"
+
+# Icono del ejecutable en Windows: compila el recurso con el rc.exe del Windows SDK, que
+# busca en el registro. Sin funciones por defecto, que solo sirven para leer metadatos de Cargo.toml.
+[build-dependencies]
+winresource = { version = "0.1.34", default-features = false }
+

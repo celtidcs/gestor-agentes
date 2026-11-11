@@ -1,0 +1,50 @@
+# Workspace de Gestor Agentes 3.0.0, la reescritura en Rust de Gestor Claude.
+#
+# Tres crates, cada uno con una sola responsabilidad:
+# - nucleo: toda la lógica de preparación de proyectos, sin interfaz ni dependencias de plataforma.
+# - lanzador: decide y ejecuta cómo se abre cada agente en cada sistema operativo.
+# - interfaz: la ventana (eframe y egui); solo presenta y llama a los otros dos.
+
+[workspace]
+resolver = "2"
+members = ["crates/nucleo", "crates/lanzador", "crates/interfaz"]
+
+[workspace.package]
+# Única fuente de la versión del producto (SemVer). Los crates la heredan.
+version = "3.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+# Ningún módulo aborta en producción: se prohíben unwrap, expect y panic.
+# Las pruebas de tests/ los permiten con un #![allow] explícito al principio de cada archivo.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+
+# Compilación de desarrollo y de pruebas con menos información de depuración. Nuestros crates
+# conservan el archivo y la línea, que es lo que se lee en un pánico de una prueba; las
+# dependencias no llevan ninguna. Medido en máquinas de 8 núcleos virtuales, con
+# cargo test --workspace --no-run desde cero: Windows pasa de 410,8 s a 204,0 s y Linux de 25,9 s
+# a 20,6 s; recompilar tras tocar un archivo de la interfaz, de 56,0 s a 28,2 s en Windows. Las
+# pruebas heredan este perfil. El perfil release no cambia.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+# Ejecutable portable y compacto.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
