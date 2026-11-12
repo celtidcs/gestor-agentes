@@ -6,6 +6,19 @@ Antes de abrir el agente, la aplicación deja el proyecto preparado para ese tra
 
 La aplicación es portable: no se instala, y su configuración viaja con ella en la carpeta datos, junto al ejecutable. Antes se llamaba Gestor Claude, y la primera vez que se abre en un equipo donde se usó aquella versión copia su configuración sin tocar la original.
 
+![Ventana de Gestor Agentes con la lista de proyectos](documentation/imagenes/gestor-agentes.png)
+
+
+Sobre Celtilander
+
+Soy un usuario novel en el mundo de la programación y la IA. He «ayudado a crear» esta app y espero que a alguien le pueda servir para algo... sin más.
+
+Lo que no funciona no lo escondo: está escrito en los defectos conocidos (https://github.com/celtidcs/gestor-agentes/blob/main/documentation/defectos-conocidos.md). Si encuentras algo que no esté ahí, cuéntamelo.
+
+Para realizar esta app he montado un sistema colaborativo y de consenso entre ChatGPT Codex, Claude Code y Gemini Antigravity. Yo puse la idea y dirigía el proyecto, mientras que ellos diseñaban, repartían y verificaban el trabajo. Ningún código fue revisado por el agente que lo había escrito, y una vez terminado todo debía ser aprobado por unanimidad. Hasta que no se conseguía el consenso, no se daba una tarea por concluida. Cuando por algún motivo no se llegaba a un consenso, era yo quien tomaba la decisión final, así que los fallos que pueda haber serán más míos que de ellos.
+
+Saludos a todo el mundo.
+
 
 Para usarla
 
