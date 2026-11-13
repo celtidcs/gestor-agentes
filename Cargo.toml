@@ -11,7 +11,7 @@ members = ["crates/nucleo", "crates/lanzador", "crates/interfaz"]
 
 [workspace.package]
 # Única fuente de la versión del producto (SemVer). Los crates la heredan.
-version = "3.0.0"
+version = "3.3.2"
 edition = "2021"
 license = "GPL-3.0-or-later"
 publish = false

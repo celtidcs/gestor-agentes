@@ -1,12 +1,17 @@
-Diario de tarea de {{AGENTE}}
+# Diario de tarea de {{AGENTE}}
 
-Tarea en curso: ninguna.
+## Tarea en curso
 
-Plan
+Ninguna.
+
+## Plan
+
 Sin plan activo.
 
-Próximo paso exacto
+## Próximo paso exacto
+
 Ninguno.
 
-Registro
+## Registro
+
 Sin entradas.

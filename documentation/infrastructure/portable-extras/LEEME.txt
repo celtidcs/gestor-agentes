@@ -1,6 +1,8 @@
-Gestor Agentes 3.0.0, versión portable
+Gestor Agentes, versión portable
 
 Gestor Agentes guarda la lista de tus proyectos de programación y los abre con un agente de inteligencia artificial: Claude Code, Codex, Gemini o Programator, con tantas cuentas de cada uno como tengas. Antes se llamaba Gestor Claude.
+
+La versión que tienes se ve arriba a la derecha de la ventana.
 
 Es portable, así que no se instala. Puedes copiar esta carpeta entera a una memoria USB o a otro ordenador y usarla directamente. Tu configuración viaja con ella, dentro de la carpeta datos.
 
@@ -21,6 +23,8 @@ Después, en los dos sistemas
 
 Pulsa el botón Agregar Proyecto y elige la carpeta principal de un proyecto tuyo. Selecciónalo en la lista con un clic y pulsa el botón del agente con el que quieras trabajar, por ejemplo Abrir · Claude 1. Se abrirá una ventana de terminal con el agente ya en marcha dentro de la carpeta del proyecto.
 
+El agente empieza a trabajar solo: se presenta, lee el estado del proyecto y los mensajes de los demás agentes y, si es la primera vez que trabaja en ese proyecto, te pregunta si es el Jefe de proyecto o un ayudante. Contesta y lo anotará; la siguiente vez ya no te lo preguntará. El Manual de uso explica cómo trabajan juntos varios agentes.
+
 Si en este ordenador habías usado Gestor Claude, la primera vez que abras Gestor Agentes, si su carpeta datos todavía no tiene tu lista de proyectos ni tus perfiles, copiará allí tu lista de proyectos y tus perfiles de agente, y te dirá qué ha copiado. La configuración antigua no se borra.
 
 
@@ -39,7 +43,7 @@ Qué hay en esta carpeta
 
 El programa es gestor-agentes.exe en Windows, o gestor-agentes en Linux.
 
-La carpeta datos guarda tu configuración: la lista de proyectos, los perfiles de agente y dos ajustes. La crea y la rellena el programa. No la borres si quieres conservarla.
+La carpeta datos guarda tu configuración: la lista de proyectos, los perfiles de agente y los ajustes de funcionamiento. La crea y la rellena el programa. No la borres si quieres conservarla.
 
 La carpeta documentacion tiene tres documentos. Manual de uso explica todo el programa paso a paso y es el que conviene leer primero. Resolucion de problemas recoge lo que suele salir mal y cómo arreglarlo. Referencia de funcionalidades describe con detalle técnico todo lo que hace el programa.
 
@@ -49,6 +53,11 @@ Llevártelo a otro ordenador
 Copia esta carpeta entera, con datos dentro, y ya está. Tus perfiles de agente funcionarán igual. La lista de proyectos guarda rutas de carpetas, así que solo sirve tal cual si los proyectos están en la misma ruta en los dos equipos, por ejemplo en una unidad compartida que se monta con la misma letra. Si no, quita de la lista los que no se puedan abrir y añade los de ese equipo.
 
 Si prefieres empezar de cero en el otro ordenador, copia la carpeta sin el contenido de datos.
+
+
+Cuando haya una versión nueva
+
+Al arrancar, el programa mira en GitHub si hay una versión más nueva y, si la hay, te dice cuál es y dónde descargarla. No descarga nada por su cuenta. Para actualizar, sustituye el programa y la carpeta documentacion por los del paquete nuevo y conserva tu carpeta datos.
 
 
 Si algo no funciona

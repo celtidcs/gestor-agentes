@@ -3,8 +3,10 @@
 //! Contiene las identidades de los agentes, la configuración portable y sus ajustes, la lógica
 //! pura de las instrucciones ([`instrucciones`]), la preparación de un proyecto, que es la parte
 //! que toca el disco ([`proyecto`]), el servicio de git y la detección de cuentas. La arquitectura
-//! está descrita en documentation/architecture.md.
+//! está descrita en documentation/architecture.md. [`actualizaciones`] decide, sin red, si hay
+//! que avisar de una versión nueva.
 
+pub mod actualizaciones;
 pub mod agentes;
 pub mod ajustes;
 pub mod configuracion;

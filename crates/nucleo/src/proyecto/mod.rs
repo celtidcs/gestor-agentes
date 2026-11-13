@@ -12,4 +12,5 @@ pub mod inicializador;
 pub mod localizador;
 pub mod momento;
 pub mod registro_de_huellas;
+pub mod revision_del_canal;
 pub mod sistema_anterior;

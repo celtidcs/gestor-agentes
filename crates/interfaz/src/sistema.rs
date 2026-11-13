@@ -3,12 +3,14 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use chrono::Local;
 use lanzador::{
     EntornoDelSistema, EntornoReal, ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento,
     PlanDeLanzamiento, Sistema,
 };
+use nucleo::actualizaciones;
 use nucleo::agentes::IdentidadAgente;
 use nucleo::ajustes::Ajustes;
 use nucleo::configuracion::{
@@ -18,14 +20,36 @@ use nucleo::cuentas::{self, CarpetaPersonal};
 use nucleo::git::{EjecutorDelSistema, ServicioGit};
 use nucleo::proyecto::estado::EstadoDelProyecto;
 use nucleo::proyecto::informe::InformeDeInicializacion;
-use nucleo::proyecto::inicializador::{ConfiguracionDeInstrucciones, InicializadorDeProyecto};
+use nucleo::proyecto::inicializador::{
+    self, ConfiguracionDeInstrucciones, InicializadorDeProyecto,
+};
 use nucleo::proyecto::localizador::LocalizadorDeInstrucciones;
 use nucleo::proyecto::momento::RelojDelSistema;
+use nucleo::proyecto::revision_del_canal;
 
+use crate::actualizaciones::ConsultorDePublicaciones;
 use crate::aplicacion::Servicios;
 use crate::fecha;
 use crate::textos;
 use crate::trabajos::Motor;
+
+/// Consulta real a la API de GitHub con ureq. Solo manda las cabeceras User-Agent y Accept.
+pub struct ConsultorGithub;
+
+impl ConsultorDePublicaciones for ConsultorGithub {
+    fn consultar(&self, direccion: &str, agente: &str, tiempo: Duration) -> Option<String> {
+        ureq::AgentBuilder::new()
+            .timeout(tiempo)
+            .user_agent(agente)
+            .build()
+            .get(direccion)
+            .set("Accept", actualizaciones::ACEPTA_LA_API)
+            .call()
+            .ok()?
+            .into_string()
+            .ok()
+    }
+}
 
 /// Servicios sobre la configuración de datos/ y el reloj del equipo.
 pub struct ServiciosReales {
@@ -79,6 +103,18 @@ impl Servicios for ServiciosReales {
     fn carpeta_personal(&self) -> Option<PathBuf> {
         EntornoReal.carpeta_personal()
     }
+
+    fn equipo_del_proyecto(
+        &self,
+        carpeta: &Path,
+    ) -> Option<(revision_del_canal::ResumenDelEquipo, chrono::NaiveDateTime)> {
+        let estado = fs::read_to_string(carpeta.join(".gestor/canal/estado.md")).ok()?;
+        let bandejas = inicializador::leer_bandejas(carpeta).unwrap_or_default();
+        Some((
+            revision_del_canal::resumir(&estado, &bandejas),
+            Local::now().naive_local(),
+        ))
+    }
 }
 
 /// Motor real: selector de carpetas del sistema, inicializador del núcleo y lanzador.
@@ -101,6 +137,10 @@ impl MotorReal {
 impl ConfiguracionDeInstrucciones for MotorReal {
     fn leer_instrucciones_antiguas(&self) -> Option<String> {
         self.configuracion.leer_instrucciones_antiguas()
+    }
+
+    fn limite_de_latido_horas(&self) -> u64 {
+        self.ajustes.limite_de_latido_horas()
     }
 
     fn limite_de_bandeja(&self) -> u64 {

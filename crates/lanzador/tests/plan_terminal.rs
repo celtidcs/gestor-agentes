@@ -76,9 +76,9 @@ fn codex_terminal_en_windows_abre_powershell_con_identidad_codex_home_y_argument
     let plan = plan(&p, Sistema::Windows, &entorno);
     let esperado = format!(
         "{}; $env:GESTOR_AGENTE = 'Codex 2'; $env:CODEX_HOME = '/cfg/codex2'; \
-         Set-Location -LiteralPath '/proyectos/MMCelt'; \
+         Set-Location -LiteralPath '/proyectos/Demo'; \
          & '{}' '-c' 'project_doc_max_bytes=65536'; {FINAL_POWERSHELL}",
-        cabecera_powershell("Codex 2 · MMCelt"),
+        cabecera_powershell("Codex 2 · Demo"),
         texto(&codex)
     );
     assert_eq!(guion_powershell(&plan), esperado);
@@ -97,12 +97,12 @@ fn codex_terminal_en_linux_va_en_el_emulador_con_identidad_codex_home_y_argument
     let p = peticion_codex();
     let plan = plan(&p, Sistema::Linux, &entorno);
     assert_eq!(plan.programa, PathBuf::from("xterm"));
-    assert_eq!(&textos(&plan.argumentos)[..2], ["-T", "Codex 2 · MMCelt"]);
+    assert_eq!(&textos(&plan.argumentos)[..2], ["-T", "Codex 2 · Demo"]);
     assert_eq!(
         guion_bash(&plan),
         format!(
             "export GESTOR_AGENTE='Codex 2'; export CODEX_HOME='/cfg/codex2'; \
-             cd '/proyectos/MMCelt'; '{}' '-c' 'project_doc_max_bytes=65536'; exec bash",
+             cd '/proyectos/Demo'; '{}' '-c' 'project_doc_max_bytes=65536'; exec bash",
             texto(&codex)
         )
     );
@@ -200,9 +200,9 @@ fn gemini_terminal_en_windows_abre_agy_con_identidad_y_argumentos_sin_otras_vari
     let p = peticion_agy();
     let plan = plan(&p, Sistema::Windows, &entorno);
     let esperado = format!(
-        "{}; $env:GESTOR_AGENTE = 'Gemini 1'; Set-Location -LiteralPath '/proyectos/MMCelt'; \
+        "{}; $env:GESTOR_AGENTE = 'Gemini 1'; Set-Location -LiteralPath '/proyectos/Demo'; \
          & '{}' '--model' 'modelo-de-prueba' '--effort' 'high'; {FINAL_POWERSHELL}",
-        cabecera_powershell("Gemini 1 · MMCelt"),
+        cabecera_powershell("Gemini 1 · Demo"),
         texto(&agy)
     );
     assert_eq!(guion_powershell(&plan), esperado);
@@ -241,7 +241,7 @@ fn gemini_terminal_en_linux_busca_agy_en_local_bin() {
     assert_eq!(
         guion_bash(&plan),
         format!(
-            "export GESTOR_AGENTE='Gemini 1'; cd '/proyectos/MMCelt'; \
+            "export GESTOR_AGENTE='Gemini 1'; cd '/proyectos/Demo'; \
              '{}' '--model' 'modelo-de-prueba' '--effort' 'high'; exec bash",
             texto(&agy)
         )
@@ -322,12 +322,12 @@ fn programator_en_linux_se_abre_en_un_emulador_de_terminal_desde_la_carpeta_de_s
     assert_eq!(
         textos(&plan.argumentos),
         [
-            "--title=Programator 1 · MMCelt",
+            "--title=Programator 1 · Demo",
             "--",
             "bash",
             "-c",
             "export GESTOR_AGENTE='Programator 1'; cd '/opt/Programator'; \
-             '/opt/Programator/programator' '--ruta' '/proyectos/MMCelt'; exec bash",
+             '/opt/Programator/programator' '--ruta' '/proyectos/Demo'; exec bash",
         ]
     );
     es_de_terminal(&plan, Path::new("/opt/Programator"));

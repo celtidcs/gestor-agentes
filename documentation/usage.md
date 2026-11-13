@@ -73,7 +73,7 @@ Mientras arranca, la barra inferior dice Buscando agentes. En ese momento la apl
 
 La ventana
 
-La ventana tiene tres pestañas en la parte de arriba, en este orden: Proyectos, Agentes e Instrucciones de los agentes. Abajo del todo está la barra de estado, una línea de texto donde la aplicación te cuenta lo que acaba de hacer: cuántos proyectos tienes, qué agente acaba de abrir o qué ha ido mal.
+Arriba a la izquierda está el nombre de la aplicación, y a la derecha su versión, por ejemplo v3.3.0. Es la versión que tienes instalada, y la que tienes que dar si preguntas por un fallo. La ventana tiene tres pestañas en la parte de arriba, en este orden: Proyectos, Agentes e Instrucciones de los agentes. Abajo del todo está la barra de estado, una línea de texto donde la aplicación te cuenta lo que acaba de hacer: cuántos proyectos tienes, qué agente acaba de abrir o qué ha ido mal.
 
 En la pestaña Proyectos pasarás casi todo el tiempo. En la pestaña Agentes ves qué agentes ha encontrado la aplicación y puedes decirle dónde están los que no encuentra. La pestaña Instrucciones de los agentes solo sirve para leer las normas que la aplicación da a los agentes, y al principio puedes ignorarla.
 
@@ -84,7 +84,7 @@ Muestra tus proyectos en una lista con cuatro columnas: Nombre, Ruta, Última ap
 
 El estado puede ser uno de estos tres. Sin configurar quiere decir que el proyecto no tiene todavía archivos de instrucciones. Formato antiguo quiere decir que tiene instrucciones que no escribió esta versión, por ejemplo de una versión anterior o escritas a mano. Configurado quiere decir que está al día. No tienes que hacer nada con ninguno de ellos, porque los dos primeros se arreglan solos la primera vez que abres el proyecto.
 
-Debajo de la lista aparece un botón por cada agente que la aplicación ha encontrado en tu ordenador, con un texto como Abrir · Claude 1 o Abrir · Codex 1.
+Debajo de la lista aparece un botón por cada agente que la aplicación ha encontrado en tu ordenador, con un texto como Abrir · Claude 1 o Abrir · Codex 1. Cuando seleccionas un proyecto, encima de esos botones aparece además una línea con el estado de su equipo de agentes, que se explica en el apartado Cómo va el equipo de un proyecto.
 
 
 Añadir un proyecto
@@ -98,11 +98,17 @@ Abrir un proyecto con un agente
 
 Haz un clic sobre el proyecto para seleccionarlo y pulsa el botón del agente con el que quieras trabajar. El doble clic sobre un proyecto no hace nada, y es a propósito: así no se abre ningún proyecto sin querer con el agente equivocado.
 
-Al pulsar el botón, la barra de estado dice que está preparando el proyecto para ese agente. Durante esa preparación, que dura muy poco, la aplicación revisa la carpeta y crea o pone al día las instrucciones de los agentes, el espacio donde se dejan mensajes y el repositorio git. Después abre una ventana de terminal titulada con el agente y el proyecto, por ejemplo Claude 1 · Gestor Claude, ya situada en la carpeta del proyecto y con el agente en marcha. La barra de estado lo confirma con un texto como Claude 1 abierto en Gestor Claude.
+Al pulsar el botón, la barra de estado dice que está preparando el proyecto para ese agente. Durante esa preparación, que dura muy poco, la aplicación revisa la carpeta y crea o pone al día las instrucciones de los agentes, el espacio donde se dejan mensajes y el repositorio git. Después abre una ventana de terminal titulada con el agente y el proyecto, por ejemplo Claude 1 · Mi proyecto, ya situada en la carpeta del proyecto y con el agente en marcha. La barra de estado lo confirma con un texto como Claude 1 abierto en Mi proyecto.
 
 Si durante la preparación ha pasado algo que conviene que sepas, antes de abrir el agente la aplicación te enseña una ventana titulada Preparación seguida del nombre del proyecto. Tiene hasta tres apartados: Errores, Avisos y Cambios. Léela con calma y pulsa Aceptar. El apartado Avisos y qué hacer con cada aviso se explican más abajo.
 
-Lo primero que hace el agente al arrancar es presentarse con una frase como esta: He leído AGENTS.md y las instrucciones del proyecto. Soy Claude 1. Canal Claude 1 disponible y listo. Si no se presenta, algo ha ido mal con sus instrucciones; díselo y te explicará qué ha leído.
+El agente empieza a trabajar solo, sin que le escribas nada. La aplicación le manda al abrirlo un primer mensaje que le pide seguir su arranque, que son nueve pasos fijos y siempre los mismos. Primero averigua quién es, porque la aplicación le dice su identidad al abrirlo, y se presenta con una frase como esta: He leído AGENTS.md y las instrucciones del proyecto. Soy Claude 1. Canal Claude 1 disponible y listo. Después lee las instrucciones propias del proyecto, el estado del proyecto, los mensajes de todos los demás agentes y su propio diario, por si dejó algo a medias la vez anterior.
+
+Luego busca su papel en el estado del proyecto. Si es la primera vez que ese agente trabaja en el proyecto, no lo encontrará, y te preguntará exactamente esto: ¿Cuál es mi papel en este proyecto: Jefe de proyecto o ayudante? Hasta que contestes no hace nada más. Contesta con una frase normal, por ejemplo eres el Jefe, o eres ayudante y el Jefe es Claude 2. El agente lo anota con la fecha y la hora, y la siguiente vez que lo abras ya no te lo preguntará. Solo puede haber un Jefe por proyecto: si nombras Jefe a otro, el anterior pasa a ser ayudante y el cambio queda anotado.
+
+Después atiende los encargos que tenga pendientes, retoma lo que hubiera dejado a medias y deja preparado su vigilante del canal, que es lo que le avisa cuando otro agente le escribe. Termina con un resumen de pocas líneas: quién es, qué papel tiene, quién es el Jefe, qué tiene pendiente y cómo vigila el canal.
+
+Si un agente no se presenta, o se queda quieto sin hacer nada, algo ha ido mal con su arranque. Escríbele que haga el arranque obligatorio de AGENTS.md y te dirá qué ha leído. El documento Resolución de problemas explica las causas más habituales.
 
 La primera vez que un agente abre una carpeta suele preguntar si confías en ella. Contesta antes de escribirle nada. Con Codex, la primera vez puede aparecer además el aviso No active thread is available. Es un mensaje del propio Codex, no de Gestor Agentes. Codex funciona igual y el aviso no vuelve a salir las siguientes veces.
 
@@ -111,26 +117,46 @@ Puedes cerrar Gestor Agentes cuando quieras: las ventanas de los agentes que hay
 
 Qué deja la aplicación dentro de cada proyecto
 
-En la carpeta principal del proyecto aparecen dos archivos. AGENTS.md es el archivo de instrucciones que leen todos los agentes. Contiene las normas comunes de trabajo, que explican cómo se verifica el código, cómo se documenta, cómo se reparten las tareas los agentes y qué no se puede hacer sin tu permiso. Lleva también una cabecera que le dice a cada agente quién es y, al final, las normas de tu equipo, de las que se habla más abajo. CLAUDE.md es un archivo de dos líneas que solo sirve para que Claude Code cargue AGENTS.md.
+En la carpeta principal del proyecto aparecen dos archivos. AGENTS.md es el archivo de instrucciones que leen todos los agentes. Empieza con el arranque en nueve pasos que se acaba de describir y sigue con las normas comunes de trabajo, que explican cómo se verifica el código, cómo se documenta, cómo se reparten las tareas los agentes y qué no se puede hacer sin tu permiso. Al final lleva las normas de tu equipo, de las que se habla más abajo. Está escrito para los agentes, no para ti: por eso usa listas, tablas y las órdenes exactas que tienen que ejecutar, y es corto, unos 14 KB, para que no les ocupe más de lo necesario. CLAUDE.md es un archivo pequeño que solo sirve para que Claude Code cargue AGENTS.md.
 
 Esos dos archivos son de la aplicación, que los escribe enteros cada vez que abres el proyecto. No merece la pena editarlos a mano, porque lo que escribas se sustituirá la siguiente vez. No se pierde, porque antes se guarda una copia, pero no se queda en su sitio.
 
 Lo propio de cada proyecto, como sus reglas, tus órdenes particulares para él o cómo se compila y se prueba, va en el archivo instrucciones-del-proyecto.md, dentro de la carpeta .gestor del proyecto. La aplicación lo crea la primera vez y no lo vuelve a tocar nunca. Los agentes lo leen al empezar.
 
-La carpeta .gestor es el espacio de trabajo de los agentes. Como su nombre empieza con un punto, puede que no la veas si tu sistema oculta ese tipo de carpetas. Dentro está el estado del proyecto, con el reparto de tareas entre agentes; la carpeta canal, con un buzón para cada agente, que en este programa se llama bandeja; la carpeta propia de cada agente, con su diario de trabajo y sus actas de verificación; el registro de tus órdenes; y el archivo propio del proyecto del que se acaba de hablar. Esa carpeta no se guarda en el repositorio git.
+La carpeta .gestor es el espacio de trabajo de los agentes. Como su nombre empieza con un punto, puede que no la veas si tu sistema oculta ese tipo de carpetas. Dentro está la carpeta canal, con el estado del proyecto, que recoge los papeles de cada agente, el reparto de tareas y los archivos que cada uno tiene reservados, y con un buzón para cada agente, que en este programa se llama bandeja. Está también la carpeta propia de cada agente, con su diario de trabajo, sus actas de verificación y su registro de funciones; el registro de tus órdenes; el archivo propio del proyecto del que se acaba de hablar; la carpeta consulta, con cuatro documentos que los agentes leen solo cuando les hacen falta, sobre cómo se escribe el código, cómo se verifica un cambio, cómo se documenta y se publica, y cómo se trabaja con Programator; y la carpeta vigilante, con los dos guiones que vigilan el canal. Esa carpeta no se guarda en el repositorio git, y no tienes que tocar nada de ella: la cuidan los agentes.
 
-Si el proyecto ya tenía instrucciones de una versión anterior, la aplicación no las pierde. Guarda una copia exacta de los archivos antiguos en la carpeta .gestor\respaldos, aparta los que ya no se usan a la carpeta .gestor\archivo y copia lo que era propio del proyecto en instrucciones-del-proyecto.md, dentro de un bloque pendiente de revisar. El primer agente que arranque en el proyecto revisa ese bloque por su cuenta antes de ponerse con otra cosa: conserva lo que siga valiendo, te pregunta lo que le plantee dudas y borra el bloque.
+El archivo propio del proyecto tiene además un apartado llamado Reglas aprendidas. Cuando un trabajo falla por una trampa del proyecto que se puede repetir, por ejemplo una orden que en tu equipo necesita una opción especial, el agente que lo descubre la deja allí escrita en una línea, para que ningún otro vuelva a caer en ella.
+
+Si el proyecto ya tenía instrucciones de una versión anterior, la aplicación no las pierde. Guarda una copia exacta de los archivos antiguos en la carpeta .gestor\respaldos, aparta a la carpeta .gestor\archivo los que ya no se usan, incluidas las reglas que agy leía por su cuenta desde la carpeta .agents, y copia lo que era propio del proyecto en instrucciones-del-proyecto.md, dentro de un bloque pendiente de revisar. El primer agente que arranque en el proyecto revisa ese bloque por su cuenta antes de ponerse con otra cosa: conserva lo que siga valiendo, te pregunta lo que le plantee dudas, rescata cualquier tarea que hubiera quedado a medias en los archivos apartados y, cuando ha terminado, borra el bloque y lo apartado. Así lo antiguo no se queda dando instrucciones contradictorias a los agentes.
 
 
 Trabajar con varios agentes a la vez
 
-Puedes abrir el mismo proyecto con varios agentes, cada uno desde su botón. Cada uno trabaja en su propia ventana y se comunica con los demás dejando mensajes en su bandeja de la carpeta .gestor\canal, que los demás leen. No tienes que decirles quién hace qué: se reparten el trabajo entre ellos y lo dejan escrito en el estado del proyecto.
+Puedes abrir el mismo proyecto con varios agentes, cada uno desde su botón. Cada uno trabaja en su propia ventana y se comunica con los demás dejando mensajes en su bandeja de la carpeta .gestor\canal, que los demás leen. Un mensaje es un encargo cuando empieza diciendo a quién va, por ejemplo Para Gemini 1; si solo menciona a alguien, no lo es.
 
-Ningún agente da por bueno su propio trabajo. Cuando uno termina algo, otro lo comprueba ejecutando las pruebas y deja constancia por escrito. Si solo trabaja un agente, la comprobación la hace otro agente al que se llame para ello, o tú mismo.
+El reparto lo hace el Jefe de proyecto. Tú hablas con el Jefe, y el Jefe habla con sus ayudantes: propone quién hace cada cosa, como programar, verificar o documentar, y lo deja escrito en el estado del proyecto. Las decisiones técnicas las acuerdan entre todos, y si no se ponen de acuerdo, el Jefe te pregunta a ti. Antes de cambiar un archivo, cada agente lo reserva en el estado del proyecto, para que dos no toquen lo mismo a la vez.
 
-Si un agente agota su límite de uso, deja escrito en qué punto estaba. Abres el mismo proyecto con otro botón y el nuevo agente continúa desde ahí.
+Ningún agente da por bueno su propio trabajo. Cuando uno termina algo, otro lo comprueba ejecutando las pruebas, rompe a propósito lo que vigila cada prueba para ver que de verdad falla, y deja constancia por escrito con un registro que se puede comprobar. Si solo trabaja un agente, la comprobación la hace otro agente al que se llame para ello, o tú mismo.
 
-Cuando quieras dar una orden que valga para todos, dísela a cualquiera de ellos. La anotará en el registro de órdenes y se la pasará a los demás.
+Si un agente agota su límite de uso, deja escrito en su diario en qué punto estaba y cuál es su próximo paso exacto. Abres el mismo proyecto con otro botón y el nuevo agente continúa desde ahí.
+
+Cuando quieras dar una orden que valga para todos, dísela al Jefe, o a cualquiera de ellos. La anotará en el registro de órdenes con tus palabras literales y se la pasará a los demás por el canal. Lo que ya está decidido no te lo vuelven a preguntar.
+
+Si trabajas con Programator, el modelo local, los demás agentes saben encargarle trabajo sin que se lo expliques: la aplicación deja en cada proyecto una guía para ellos que dice cómo se le hace un encargo, qué hace bien y qué no, y que quien le encarga algo comprueba después el resultado.
+
+
+Cómo se enteran los agentes de los mensajes
+
+Cada agente tiene un vigilante del canal, que le avisa cuando otro agente escribe. No funciona igual en todas las herramientas. Claude Code lo deja en marcha en segundo plano y recibe un aviso en cuanto hay un mensaje nuevo; si el mensaje va dirigido a él, el aviso lo marca como encargo. Codex se monta él mismo, al arrancar, su propio sistema de vigilancia, que lo avisa aunque esté esperando. agy no tiene forma de recibir avisos: mira el canal al terminar cada paso de su trabajo. Por eso, si un agente de agy está parado esperando y otro le escribe, no se entera hasta que tú le digas algo; basta con escribirle que mire el canal.
+
+
+Cómo va el equipo de un proyecto
+
+Al seleccionar un proyecto en la lista, encima de los botones aparece una línea con su equipo, por ejemplo: Equipo, Jefe: Claude 2, claude2 hace 5 min, gemini hace 3 h, 2 reservas. Te dice quién es el Jefe, cuánto hace que cada agente dio señales de vida y cuántos archivos tienen reservados. Si alguno dejó código cambiado a propósito para una prueba y sin restaurar, la línea lo avisa con MUTACIONES VIVAS. La línea se pone al día al seleccionar el proyecto y cada vez que abres un agente.
+
+Si el proyecto todavía no tiene estado del canal, porque no se ha abierto nunca con esta versión, la línea no aparece.
+
+Al abrir un proyecto, la ventana de preparación también puede avisarte de cosas del equipo que no cuadran: dos agentes que reservan el mismo archivo, la reserva de un agente que lleva más de doce horas sin dar señales, código cambiado a propósito sin restaurar o un estado del proyecto al que le falta algún apartado. El apartado Los avisos y qué hacer con ellos explica cada uno. Díselo al Jefe del proyecto, que es quien lo ordena.
 
 
 Quitar un proyecto de la lista
@@ -185,6 +211,8 @@ Si dice que las marcas estaban dañadas, un archivo de instrucciones antiguo est
 
 Si dice que no se ha podido comprobar git, git no está instalado o no responde. El proyecto se ha preparado igualmente, pero sin repositorio. Instala git y vuelve a abrir el proyecto.
 
+Los avisos siguientes son del estado del equipo de agentes, que la aplicación revisa cada vez que abres el proyecto. Si dice que al estado del proyecto le falta un apartado, como Papeles, Reservas activas o Mutaciones vivas, es que el estado viene de una versión anterior o alguien lo ha editado; el primer agente que arranque lo añade sin borrar nada. Si dice que hay mutaciones vivas, algún agente cambió código a propósito para comprobar una prueba y todavía no lo ha restaurado; mientras siga así, el proyecto no está en su estado normal, y su dueño tiene que restaurarlo antes de seguir. Si dice que dos agentes tienen reservada la misma ruta, los dos podrían estar cambiando el mismo archivo; uno de los dos tiene que liberarla. Si dice que la reserva de un agente es de alguien sin latido reciente, ese agente lleva más de doce horas sin dar señales y puede que ya no esté trabajando; el Jefe comprueba si la reserva sigue valiendo. Si dice que una reserva no sigue el formato, está mal escrita y la aplicación no puede comprobarla. Las doce horas se cambian en ajustes.json, con LimiteDeLatidoHoras.
+
 Hay otro aviso que no sale en esa ventana, sino en la barra de estado, al abrir Codex o Gemini. Empieza por la palabra AVISO y dice que AGENTS.md mide más de lo que lee el agente: Codex lee los primeros 32768 bytes y Gemini los primeros 24000. Significa que ese agente no verá el final de sus instrucciones. Normalmente no pasa, porque la aplicación escribe AGENTS.md por debajo de esos tamaños; si sale, suele ser porque las normas de tu equipo, de las que se habla a continuación, son muy largas.
 
 Si al pulsar un botón el agente no se abre, la aplicación lo explica en una ventana. Si dice que el agente no está instalado, mira la pestaña Agentes. Si dice que el perfil está incompleto, falta algún dato del perfil, normalmente la ruta de Programator, y la ventana dice en qué archivo se arregla. En los dos casos, los archivos del proyecto ya se han preparado.
@@ -204,9 +232,14 @@ Muestra las normas comunes que la aplicación escribe en todos los proyectos. So
 
 Dónde guarda la aplicación tu configuración
 
-Todo está en la carpeta datos, junto al ejecutable. Son cuatro archivos, todos de texto. config.json guarda la lista de proyectos. perfiles-agentes.json guarda los perfiles de agente: para cada uno, su tipo, su número, la carpeta de su cuenta y, si se la has puesto, la ruta de su programa. perfiles-agentes.version es un número que la aplicación usa para saber si tiene que poner al día los perfiles. ajustes.json guarda dos ajustes de funcionamiento: TiempoMaximoGitSegundos, los segundos que la aplicación espera a git antes de darlo por perdido, que son 30 si no lo cambias, y LimiteDeBandejaBytes, el tamaño a partir del cual avisa de una bandeja sin podar, que son 16384.
+Todo está en la carpeta datos, junto al ejecutable. Son cuatro archivos, todos de texto. config.json guarda la lista de proyectos. perfiles-agentes.json guarda los perfiles de agente: para cada uno, su tipo, su número, la carpeta de su cuenta y, si se la has puesto, la ruta de su programa. perfiles-agentes.version es un número que la aplicación usa para saber si tiene que poner al día los perfiles. ajustes.json guarda los ajustes de funcionamiento: TiempoMaximoGitSegundos, los segundos que la aplicación espera a git antes de darlo por perdido, que son 30 si no lo cambias; LimiteDeBandejaBytes, el tamaño a partir del cual avisa de una bandeja sin podar, que son 16384; ComprobarActualizaciones, que vale true para que la aplicación mire al arrancar si hay una versión nueva, y false para que no lo mire; RepositorioDeActualizaciones, el repositorio de GitHub donde lo mira; TiempoMaximoActualizacionSegundos, los segundos que espera la respuesta, que son 5; y LimiteDeLatidoHoras, las horas sin noticias de un agente a partir de las cuales la aplicación avisa de que sus reservas pueden estar abandonadas, que son 12.
 
 No necesitas tocar ninguno de estos archivos, porque todo se hace desde la ventana. Si los editas a mano y te equivocas, la aplicación te dice al arrancar que la configuración no es válida y no sobrescribe nada, para que puedas corregirlo.
+
+
+Cuando hay una versión nueva
+
+Cada vez que abres la aplicación, esta mira en GitHub, sin hacerte esperar, si se ha publicado una versión más nueva que la tuya. Si la hay, te enseña una ventana titulada Actualización disponible, con la versión nueva, la que tienes y la dirección de la página donde se descarga. Descarga allí el paquete de tu sistema y sustituye el programa, pero conserva tu carpeta datos, que es la que guarda tu lista de proyectos y tus perfiles. La aplicación no descarga ni instala nada por su cuenta, y no envía ningún dato tuyo: solo pregunta cuál es la última versión. Si no tienes conexión, simplemente no sale nada. Si no quieres que lo mire, pon ComprobarActualizaciones en false en ajustes.json.
 
 
 Llevarte el programa a otro ordenador
@@ -225,4 +258,4 @@ No hay nada que desinstalar. Borra la carpeta del programa y listo; con ella se 
 
 Un día normal de trabajo
 
-Abres Gestor Agentes y ves tu lista. Seleccionas el proyecto y pulsas el botón del agente con el que quieres empezar. Se abre la terminal, el agente se presenta y retoma lo que hubiera pendiente. Si quieres que otro agente revise lo hecho o ayude con otra parte, pulsas su botón y se incorpora al mismo proyecto. Al terminar, los agentes dejan escrito el estado del proyecto y el historial de cambios, de modo que la próxima vez todo sigue ahí, abras con el agente que abras.
+Abres Gestor Agentes y ves tu lista. Seleccionas el proyecto y, encima de los botones, ves cómo está su equipo: quién es el Jefe y cuándo dio señales cada agente. Pulsas el botón del Jefe y se abre su terminal: el agente se presenta, lee lo que dejaron los demás y retoma lo que hubiera pendiente. Le cuentas lo que quieres y él reparte el trabajo. Si quieres que otro agente revise lo hecho o ayude con otra parte, pulsas su botón y se incorpora al mismo proyecto como ayudante; el Jefe le hace los encargos por el canal y otro agente comprueba cada trabajo antes de darlo por bueno. Al terminar, los agentes dejan escrito el estado del proyecto, su diario con el próximo paso y el historial de cambios, de modo que la próxima vez todo sigue ahí, abras con el agente que abras.

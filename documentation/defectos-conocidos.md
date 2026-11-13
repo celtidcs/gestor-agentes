@@ -24,6 +24,16 @@ Codex instalado con npm en Windows
 Si el programa codex que se encuentra es codex.cmd, el que instala npm, PowerShell lo ejecuta a través de cmd.exe, y cmd.exe interpreta caracteres como & o % en los argumentos que añade el perfil. La ruta del proyecto no corre ese riesgo, porque no va en los argumentos. Pero un argumento del perfil con esos caracteres no llegaría intacto a codex. Si necesitas pasar argumentos así, instala codex con su instalador oficial, que deja un codex.exe, o fija en el perfil la ruta de un codex.exe.
 
 
+agy no recibe aviso de los mensajes nuevos
+
+Claude Code puede dejar el vigilante del canal en segundo plano y le llega un aviso cada vez que otro agente escribe. Codex se monta él mismo, al arrancar, su propio sistema de vigilancia del canal, que lo avisa aunque esté esperando. agy no tiene ninguna de las dos posibilidades: solo ve los mensajes nuevos cuando ejecuta el vigilante en su modo de una pasada, que sus instrucciones le piden al terminar cada paso. Si está parado esperando, no se entera hasta que le escribes. Dile que mire el canal. Si Codex no consigue montar el suyo, le pasa lo mismo.
+
+
+En Windows, Claude Code toma la bandeja claude.md por un archivo de instrucciones
+
+La bandeja de Claude 1 se llama claude.md. Windows no distingue mayúsculas de minúsculas, y Claude Code carga como instrucciones el CLAUDE.md de las carpetas cuyos archivos lee, así que al leer el canal puede tomar esa bandeja por un archivo de instrucciones de la carpeta .gestor/canal. Se ha visto en una sesión de Claude Code en Windows. No cambia lo que hace el agente, porque la bandeja solo contiene sus propios mensajes, pero los mete en su contexto una vez más. En Linux no pasa.
+
+
 Claude Code lee dos veces las normas comunes
 
 Claude Code carga por su cuenta el CLAUDE.md de las carpetas superiores, y además la aplicación copia esas normas al final de AGENTS.md, que Claude Code carga a través de su CLAUDE.md. No causa contradicciones, porque el texto es el mismo, pero ocupa algo más de contexto. Se copian igualmente porque Codex y Gemini no las leerían de otro modo. Si las dos copias llegan a diferir, manda la original, y la copia se pone al día en la siguiente apertura.

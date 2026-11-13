@@ -7,9 +7,10 @@
 use std::process::ExitCode;
 
 use eframe::egui;
+use gestor_agentes::actualizaciones::{self, Consulta};
 use gestor_agentes::arranque;
 use gestor_agentes::icono;
-use gestor_agentes::sistema::{MotorReal, ServiciosReales};
+use gestor_agentes::sistema::{ConsultorGithub, MotorReal, ServiciosReales};
 use gestor_agentes::tema;
 use gestor_agentes::textos;
 use gestor_agentes::trabajos::Trabajador;
@@ -37,6 +38,7 @@ fn main() -> ExitCode {
 fn abrir() -> Result<(), Box<dyn std::error::Error>> {
     let configuracion = Configuracion::new(arranque::carpeta_de_datos()?);
     let ajustes = configuracion.cargar_ajustes()?;
+    let consulta = Consulta::desde(&ajustes);
     let aplicacion = arranque::estado_inicial(
         &configuracion,
         Box::new(ServiciosReales::new(configuracion.clone())),
@@ -68,11 +70,16 @@ fn abrir() -> Result<(), Box<dyn std::error::Error>> {
                 Box::new(MotorReal::new(configuracion, ajustes)),
                 Box::new(move || contexto.request_repaint()),
             )?;
-            Ok(Box::new(Ventana::new(
-                aplicacion,
-                trabajador,
-                nucleo::plantillas::nucleo_comun(),
-            )))
+            let contexto = creacion.egui_ctx.clone();
+            let avisos = actualizaciones::en_segundo_plano(
+                consulta,
+                Box::new(ConsultorGithub),
+                Box::new(move || contexto.request_repaint()),
+            );
+            Ok(Box::new(
+                Ventana::new(aplicacion, trabajador, nucleo::plantillas::nucleo_comun())
+                    .con_avisos_de_version(avisos),
+            ))
         }),
     )?;
     Ok(())

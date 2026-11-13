@@ -28,7 +28,7 @@ Al arrancar dice que la configuración no es válida
 
 La barra de estado dice Configuración no válida, seguido del motivo. Casi siempre es porque se ha editado a mano uno de los archivos de la carpeta datos, que está junto al ejecutable. La aplicación no lo sobrescribe, para no perder lo que hubieras escrito.
 
-Abre el archivo que nombra el mensaje con un editor de texto, como el Bloc de notas, y busca el error. En perfiles-agentes.json suele ser una coma de más o de menos, una comilla sin cerrar, o un tipo de agente que no es Claude, Codex, Gemini ni Programator. En ajustes.json, el mensaje dice qué clave tiene un cero, y ninguna de las dos lo admite. Si no encuentras el error, cambia el nombre del archivo, por ejemplo añadiéndole .viejo al final, y la aplicación creará uno nuevo con los valores de serie: cinco perfiles, que son Claude 1, Claude 2, Codex 1, Gemini 1 y Programator 1, y los dos ajustes con sus valores por defecto.
+Abre el archivo que nombra el mensaje con un editor de texto, como el Bloc de notas, y busca el error. En perfiles-agentes.json suele ser una coma de más o de menos, una comilla sin cerrar, o un tipo de agente que no es Claude, Codex, Gemini ni Programator. En ajustes.json, el mensaje dice qué clave tiene un valor que no se admite: un cero en cualquiera de los tiempos o límites, o un RepositorioDeActualizaciones que no tiene la forma propietario/nombre. Si no encuentras el error, cambia el nombre del archivo, por ejemplo añadiéndole .viejo al final, y la aplicación creará uno nuevo con los valores de serie: cinco perfiles, que son Claude 1, Claude 2, Codex 1, Gemini 1 y Programator 1, y todos los ajustes con sus valores por defecto.
 
 
 No aparece ningún botón para abrir
@@ -57,6 +57,41 @@ Lo más probable es que tengas la aplicación de escritorio de Codex, la que se 
 Codex instalado con npm no recibe bien un argumento
 
 Si instalaste Codex con npm en Windows, el programa que se ejecuta es un archivo intermedio llamado codex.cmd, y Windows lo pasa por su intérprete de órdenes clásico. Ese intérprete da un significado especial a algunos caracteres, como el ampersand y el signo de porcentaje. Solo te afecta si has añadido al perfil de Codex argumentos extra que lleven esos caracteres: en ese caso no le llegarían intactos a Codex. La carpeta del proyecto no corre ese riesgo. Si lo necesitas, instala Codex con el instalador oficial de OpenAI, que deja un codex.exe sin ese intermediario.
+
+
+El agente se abre pero no hace nada hasta que le escribo
+
+La aplicación manda a Claude Code, Codex y agy un primer mensaje que les pide hacer su arranque, así que deberían empezar solos. Si uno se queda quieto, lo más habitual es que esté esperando una respuesta a su propia pregunta de si confías en la carpeta, que algunas herramientas hacen la primera vez que se abren en un proyecto: contéstala y seguirá. Si aun así no arranca, escríbele que haga el arranque obligatorio de AGENTS.md. Si te pasa siempre con la misma herramienta, comprueba que esté al día, porque las versiones muy antiguas pueden no aceptar un mensaje al abrirse. Programator no recibe ese mensaje, porque trabaja de otra manera.
+
+
+El agente me pregunta su papel cada vez que lo abro
+
+El agente busca su papel en el estado del proyecto, en el apartado Papeles, y solo pregunta si no lo encuentra. Si te lo pregunta cada vez, es que no lo anotó después de tu respuesta, o que lo anotó con otro nombre. Pídele que lo escriba en ese apartado con su identidad, por ejemplo Claude 2, y que te lo confirme.
+
+
+Un agente no se entera de los mensajes de los demás
+
+Depende de la herramienta. Claude Code deja un vigilante en segundo plano que lo avisa en cuanto otro escribe; si ha dejado de avisar, es que se le ha caducado y no lo ha vuelto a armar: pídele que lo arme otra vez. Codex se monta él mismo su sistema de vigilancia al arrancar; si no lo ha conseguido, mira el canal al terminar cada paso, como agy. agy no puede recibir avisos y solo ve los mensajes nuevos cuando termina un paso de su trabajo, así que si está parado esperando no se enterará hasta que le escribas: basta con decirle que mire el canal. Recuerda también que un mensaje solo es un encargo si empieza diciendo a quién va, por ejemplo Para Codex 1.
+
+
+No aparece la línea del equipo al seleccionar un proyecto
+
+La línea sale encima de los botones cuando el proyecto tiene estado del canal, es decir, cuando se ha abierto al menos una vez con esta versión y ya existe su archivo .gestor\canal\estado.md. Abre el proyecto con cualquier agente y vuelve a seleccionarlo. Si la línea dice Jefe sin asignar, ningún agente ha anotado todavía quién es el Jefe: el primero que arranque te lo preguntará.
+
+
+La ventana de preparación avisa de reservas, mutaciones vivas o apartados que faltan
+
+Son avisos sobre el equipo de agentes del proyecto, no fallos de la aplicación. El Manual de uso explica cada uno en su apartado Los avisos y qué hacer con ellos. En resumen: lo que falte en el estado del proyecto lo añade el primer agente que arranque; las mutaciones vivas las tiene que restaurar el agente que las aplicó; y las reservas repetidas o de agentes que ya no están las ordena el Jefe del proyecto. Mientras no se arreglen, el aviso sale cada vez que abres el proyecto.
+
+
+Sale una ventana titulada Actualización disponible
+
+La aplicación mira al arrancar si hay en GitHub una versión más nueva que la tuya, y te avisa si la hay. La ventana dice cuál es la nueva, cuál tienes y la dirección de la página donde se descarga. Descarga allí el paquete de tu sistema, descomprímelo y sustituye el programa y la carpeta documentacion, pero conserva tu carpeta datos, que guarda tu lista de proyectos y tus perfiles. La aplicación no descarga ni instala nada por su cuenta. Si no quieres que lo mire, abre datos\ajustes.json con un editor de texto y pon ComprobarActualizaciones en false.
+
+
+Hay una versión nueva pero no me sale el aviso
+
+El aviso solo sale si la aplicación consigue preguntar a GitHub. Si no hay conexión, si GitHub tarda más de cinco segundos en responder o si la respuesta no se entiende, no sale nada y la aplicación funciona igual. Comprueba también que ComprobarActualizaciones no esté en false en datos\ajustes.json. Siempre puedes ver tu versión arriba a la derecha de la ventana y compararla con la última publicada en la página del repositorio.
 
 
 Al abrir Codex aparece el mensaje No active thread is available

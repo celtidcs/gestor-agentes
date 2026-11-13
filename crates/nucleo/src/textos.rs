@@ -37,6 +37,61 @@ pub const AJUSTE_TIEMPO_CERO: &str =
 pub const AJUSTE_LIMITE_CERO: &str =
     "LimiteDeBandejaBytes tiene que ser mayor que cero; con cero se avisaría de todas las bandejas";
 
+/// Motivo del rechazo de un límite de latido de cero horas.
+pub const AJUSTE_LATIDO_CERO: &str =
+    "LimiteDeLatidoHoras tiene que ser mayor que cero; con cero toda reserva parecería huérfana";
+
+/// Aviso: a estado.md le falta un apartado obligatorio.
+#[must_use]
+pub fn estado_sin_apartado(estado: &str, apartado: &str) -> String {
+    format!(
+        "{estado} no tiene el apartado «{apartado}» de la plantilla; el primer agente que arranque lo añade sin borrar nada."
+    )
+}
+
+/// Aviso: hay mutaciones de control aplicadas.
+#[must_use]
+pub fn mutaciones_vivas(estado: &str) -> String {
+    format!(
+        "{estado} anota mutaciones vivas: hay código cambiado a propósito para una prueba y sin restaurar. Que su dueño lo restaure antes de seguir."
+    )
+}
+
+/// Aviso: una reserva no sigue el formato de la plantilla.
+#[must_use]
+pub fn reserva_ilegible(estado: &str, linea: &str) -> String {
+    format!(
+        "{estado} tiene una reserva que no sigue el formato «- <Agente>, <fecha hora>: <rutas> — <motivo>»: {linea}"
+    )
+}
+
+/// Aviso: dos agentes reservan la misma ruta.
+#[must_use]
+pub fn reserva_repetida(ruta: &str, uno: &str, otro: &str) -> String {
+    format!("{uno} y {otro} tienen reservada a la vez {ruta}; uno de los dos tiene que liberarla.")
+}
+
+/// Aviso: la reserva es de un agente sin latido reciente.
+#[must_use]
+pub fn reserva_sin_latido(agente: &str, horas: Option<i64>, limite: u64) -> String {
+    match horas {
+        Some(horas) => format!(
+            "{agente} tiene reservas, pero su último latido es de hace {horas} horas, más de las {limite} de LimiteDeLatidoHoras; puede que ya no esté trabajando. Que el Jefe compruebe si siguen vigentes."
+        ),
+        None => format!(
+            "{agente} tiene reservas, pero su bandeja no tiene ningún latido legible; puede que ya no esté trabajando. Que el Jefe compruebe si siguen vigentes."
+        ),
+    }
+}
+
+/// Motivo del rechazo de un tiempo máximo de cero segundos para la consulta de versión.
+pub const AJUSTE_TIEMPO_ACTUALIZACION_CERO: &str =
+    "TiempoMaximoActualizacionSegundos tiene que ser mayor que cero; con cero GitHub no tendría tiempo de responder";
+
+/// Motivo del rechazo de un repositorio de actualizaciones mal escrito.
+pub const AJUSTE_REPOSITORIO_INVALIDO: &str =
+    "RepositorioDeActualizaciones tiene que tener la forma propietario/nombre, como celtidcs/gestor-agentes";
+
 // Informe de preparación: estructura.
 
 /// Título del apartado de errores.

@@ -315,7 +315,7 @@ fn powershell_cada_argumento_hostil_del_perfil_queda_en_su_literal_intacto() {
             let p = peticion_con_argumentos(herramienta, &nombre, &carpeta);
             let guion = guion_powershell(&plan(&p, Sistema::Windows, &entorno));
             let esperados = vec![
-                "Claude 2 · MMCelt".to_owned(),
+                "Claude 2 · Demo".to_owned(),
                 "Claude 2".to_owned(),
                 carpeta.clone(),
                 PROGRAMA_FIJADO.to_owned(),

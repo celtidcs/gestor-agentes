@@ -1,8 +1,10 @@
 //! Barreras de la identidad de los agentes y del contenido de las plantillas canónicas.
 //!
 //! Traducen las pruebas de identidad y de plantillas de la
-//! 2.3.2: estilo de escritura sin asteriscos ni almohadillas, ninguna marca de región en línea
-//! completa y ninguna regla de un proyecto concreto en el núcleo. Desde la 3.0.0 fijan además
+//! 2.3.2: ninguna marca de región en línea completa y ninguna regla de un proyecto concreto en el
+//! núcleo. Desde la 3.1.0, los textos que leen los agentes
+//! se escriben para un agente, en markdown: la barrera de prosa sin asteriscos ni almohadillas se
+//! sustituye por la que exige que cada uno empiece con un título. Desde la 3.0.0 fijan además
 //! que la cabecera es una sola para todas las herramientas, que CLAUDE.md solo apunta a AGENTS.md
 //! y al archivo propio, y que el núcleo remite a los documentos de consulta que se escriben.
 
@@ -126,11 +128,21 @@ fn primera_instancia_es_la_uno() {
 
 // Plantillas.
 
+/// Textos que se insertan dentro de otro y no son un documento propio: el aviso de archivados
+/// es la frase que presenta una lista dentro del bloque pendiente.
+const FRAGMENTOS_SIN_TITULO: [&str; 1] = ["aviso de archivados"];
+
 #[test]
-fn plantillas_estan_en_prosa_sin_asteriscos_ni_almohadillas() {
+fn plantillas_para_los_agentes_empiezan_con_un_titulo_markdown() {
     for (nombre, texto) in textos_escritos_para_los_agentes() {
-        assert!(!texto.contains('*'), "{nombre} contiene asteriscos");
-        assert!(!texto.contains('#'), "{nombre} contiene almohadillas");
+        if FRAGMENTOS_SIN_TITULO.contains(&nombre.as_str()) {
+            continue;
+        }
+        assert!(
+            texto.starts_with("# ") || texto.starts_with("## "),
+            "{nombre} no empieza con un título: {:?}",
+            texto.lines().next()
+        );
     }
 }
 
@@ -258,7 +270,7 @@ fn los_esqueletos_sustituyen_el_agente_y_terminan_en_salto_de_linea() {
     let bandeja = plantillas::esqueleto_gestor(EsqueletoGestor::Bandeja, claude2.as_ref());
     let estado = plantillas::esqueleto_gestor(EsqueletoGestor::Estado, None);
 
-    assert!(bandeja.starts_with("Bandeja de Claude 2\n"));
+    assert!(bandeja.starts_with("# Bandeja de Claude 2\n"));
     assert!(!bandeja.contains(plantillas::MARCADOR_AGENTE));
     assert!(bandeja.ends_with('\n') && !bandeja.ends_with("\n\n"));
     assert!(estado.ends_with('\n') && !estado.ends_with("\n\n"));

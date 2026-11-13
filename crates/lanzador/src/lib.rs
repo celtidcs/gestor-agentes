@@ -103,6 +103,12 @@ pub struct PeticionDeLanzamiento {
     /// codex. Solo los usan [`Herramienta::Codex`] y [`Herramienta::Gemini`]; Claude y
     /// Programator los ignoran.
     pub argumentos_extra: Vec<String>,
+    /// Primer mensaje que recibe el agente al abrir su sesión interactiva, para que ejecute el
+    /// arranque de AGENTS.md sin esperar a que el usuario escriba. Va como último argumento:
+    /// `claude <mensaje>`, `codex <argumentos del perfil> <mensaje>` y
+    /// `agy <argumentos del perfil> -i <mensaje>`. Programator lo ignora. Si es `None` o está en
+    /// blanco, el agente se abre sin mensaje, como hasta la 3.0.0.
+    pub mensaje_inicial: Option<String>,
 }
 
 /// Decisión de lanzamiento, completa y sin efectos. En Windows el proceso se crea siempre con

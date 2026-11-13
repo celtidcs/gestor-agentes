@@ -93,6 +93,21 @@ impl Momento {
         format!("{:04}-{:02}-{:02}", self.anio, self.mes, self.dia)
     }
 
+    /// El mismo momento como fecha y hora de chrono, para calcular cuánto ha pasado desde otro.
+    #[must_use]
+    pub fn como_fecha_y_hora(&self) -> Option<chrono::NaiveDateTime> {
+        chrono::NaiveDate::from_ymd_opt(
+            i32::from(self.anio),
+            u32::from(self.mes),
+            u32::from(self.dia),
+        )?
+        .and_hms_opt(
+            u32::from(self.hora),
+            u32::from(self.minuto),
+            u32::from(self.segundo),
+        )
+    }
+
     /// Marca «yyyyMMdd-HHmmss» del nombre de un respaldo o un archivado; ordena cronológicamente.
     #[must_use]
     pub fn marca_de_tiempo(&self) -> String {

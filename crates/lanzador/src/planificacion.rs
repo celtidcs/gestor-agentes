@@ -50,6 +50,13 @@ const VARIABLE_CONFIGURACION_CLAUDE: &str = "CLAUDE_CONFIG_DIR";
 const VARIABLE_CONFIGURACION_CODEX: &str = "CODEX_HOME";
 /// Opción con la que Programator recibe la carpeta del proyecto.
 const OPCION_RUTA_PROGRAMATOR: &str = "--ruta";
+/// Opción de agy que abre la sesión interactiva con un primer mensaje: «-i Short alias for
+/// --prompt-interactive», «Run an initial prompt interactively and continue the session»
+/// (agy --help, comprobado el 2026-11-13). Claude Code y codex
+/// reciben el mensaje como argumento posicional: «claude "query"», «Start interactive session
+/// with initial prompt» (https://code.claude.com/docs/en/cli-reference) y «Usage: codex
+/// [OPTIONS] [PROMPT]» (codex --help, el mismo día).
+const OPCION_MENSAJE_AGY: &str = "-i";
 
 /// Véase [`crate::planificar`].
 pub(crate) fn planificar(
@@ -247,7 +254,7 @@ fn plan_de_claude(
             variables,
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
-            argumentos: Vec::new(),
+            argumentos: mensaje_inicial(peticion).into_iter().collect(),
             carpetas_a_crear: peticion.directorio_configuracion.iter().cloned().collect(),
         },
         sistema,
@@ -289,7 +296,10 @@ fn plan_de_codex(
             variables,
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
-            argumentos: argumentos_del_perfil(peticion),
+            argumentos: argumentos_del_perfil(peticion)
+                .into_iter()
+                .chain(mensaje_inicial(peticion))
+                .collect(),
             carpetas_a_crear: peticion.directorio_configuracion.iter().cloned().collect(),
         },
         sistema,
@@ -312,7 +322,14 @@ fn plan_de_gemini(
             variables: vec![asignacion_de_identidad(peticion)],
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
-            argumentos: argumentos_del_perfil(peticion),
+            argumentos: argumentos_del_perfil(peticion)
+                .into_iter()
+                .chain(
+                    mensaje_inicial(peticion)
+                        .into_iter()
+                        .flat_map(|mensaje| [OPCION_MENSAJE_AGY, mensaje]),
+                )
+                .collect(),
             carpetas_a_crear: Vec::new(),
         },
         sistema,
@@ -359,6 +376,14 @@ fn buscar_con_instalador(
             entorno,
         )
     })
+}
+
+/// Mensaje inicial de la petición, si lo hay y no está en blanco.
+fn mensaje_inicial(peticion: &PeticionDeLanzamiento) -> Option<&str> {
+    peticion
+        .mensaje_inicial
+        .as_deref()
+        .filter(|mensaje| !mensaje.trim().is_empty())
 }
 
 /// Los argumentos del perfil como texto, para el guion de la terminal.

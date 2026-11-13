@@ -114,6 +114,7 @@ fn comprobar_en(raiz: &Path, caso: &Caso) -> Result<(), String> {
         directorio_configuracion: caso.con_codex_home.then(|| configuracion.clone()),
         ejecutable: Some(guion),
         argumentos_extra: caso.argumentos.clone(),
+        mensaje_inicial: None,
     };
     let plan = match planificar(&peticion, Sistema::actual(), &EntornoReal) {
         Ok(plan) => plan,

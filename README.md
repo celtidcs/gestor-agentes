@@ -4,6 +4,8 @@ Gestor Agentes es una aplicación de escritorio para Windows y Linux que guarda 
 
 Antes de abrir el agente, la aplicación deja el proyecto preparado para ese trabajo en común. Escribe AGENTS.md, el archivo de instrucciones que leen todos los agentes, y CLAUDE.md, con el que Claude Code lo carga. Crea una sola vez el archivo propio del proyecto, instrucciones-del-proyecto.md, que nunca vuelve a tocar. Prepara la carpeta .gestor, donde los agentes se dejan mensajes y llevan su diario, y crea el repositorio git si no existe.
 
+Cada agente empieza a trabajar solo en cuanto se abre: se presenta, lee el estado del proyecto y los mensajes de los demás, te pregunta si es el Jefe de proyecto o un ayudante la primera vez y deja preparado un vigilante que le avisa cuando otro agente le escribe. Al seleccionar un proyecto, la ventana muestra cómo va su equipo, y al abrirlo avisa de lo que no cuadra, como dos agentes que reservan el mismo archivo. La versión se ve arriba a la derecha, y al arrancar la aplicación te avisa si hay una más nueva. El documento documentation/harness-engineering.md explica qué ideas de la ingeniería de arneses para agentes aplica la aplicación y con qué funcionalidad.
+
 La aplicación es portable: no se instala, y su configuración viaja con ella en la carpeta datos, junto al ejecutable. Antes se llamaba Gestor Claude, y la primera vez que se abre en un equipo donde se usó aquella versión copia su configuración sin tocar la original.
 
 ![Ventana de Gestor Agentes con la lista de proyectos](documentation/imagenes/gestor-agentes.png)

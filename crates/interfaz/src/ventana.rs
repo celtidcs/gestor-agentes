@@ -1,8 +1,12 @@
 //! Ventana principal. Solo pinta el estado de [`Aplicacion`] y le pasa cada clic; las reglas
 //! viven allí y los trabajos largos en el [`Trabajador`].
 
-use eframe::egui::{self, Color32, RichText};
+use std::sync::mpsc::Receiver;
 
+use eframe::egui::{self, Color32, RichText};
+use nucleo::actualizaciones::Publicacion;
+
+use crate::actualizaciones::VERSION_INSTALADA;
 use crate::aplicacion::Aplicacion;
 use crate::tema;
 use crate::textos;
@@ -39,6 +43,8 @@ pub struct Ventana {
     trabajador: Trabajador,
     nucleo_comun: String,
     pestana: Pestana,
+    /// Por donde llega, una vez, la versión nueva publicada, si la hay.
+    avisos_de_version: Option<Receiver<Publicacion>>,
 }
 
 impl Ventana {
@@ -51,11 +57,43 @@ impl Ventana {
             trabajador,
             nucleo_comun,
             pestana: Pestana::Proyectos,
+            avisos_de_version: None,
         };
         if let Some(trabajo) = ventana.aplicacion.detectar() {
             ventana.encargar(trabajo);
         }
         ventana
+    }
+
+    /// Recibe por `avisos` la versión nueva, si la consulta de arranque la encuentra, para
+    /// avisar de ella con un diálogo.
+    #[must_use]
+    pub fn con_avisos_de_version(mut self, avisos: Receiver<Publicacion>) -> Self {
+        self.avisos_de_version = Some(avisos);
+        self
+    }
+
+    /// Pasa a la cola de diálogos el aviso de versión nueva, si ha llegado. Solo llega uno: al
+    /// recibirlo, o si la consulta terminó sin nada, se deja de mirar.
+    fn recoger_aviso_de_version(&mut self) {
+        let Some(avisos) = &self.avisos_de_version else {
+            return;
+        };
+        match avisos.try_recv() {
+            Ok(publicacion) => {
+                self.aplicacion.informar(
+                    textos::TITULO_ACTUALIZACION,
+                    textos::actualizacion_disponible(
+                        &publicacion.version.to_string(),
+                        VERSION_INSTALADA,
+                        &publicacion.enlace,
+                    ),
+                );
+                self.avisos_de_version = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.avisos_de_version = None,
+        }
     }
 
     fn aplicar(&mut self, orden: Orden) {
@@ -99,11 +137,20 @@ impl Ventana {
     }
 
     fn encabezado(&mut self, ui: &mut egui::Ui) {
-        ui.label(
-            RichText::new(textos::TITULO)
-                .size(tema::TAMANO_ENCABEZADO)
-                .strong(),
-        );
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(textos::TITULO)
+                    .size(tema::TAMANO_ENCABEZADO)
+                    .strong(),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    RichText::new(textos::version_visible(VERSION_INSTALADA))
+                        .size(tema::TAMANO_PEQUENO)
+                        .color(tema::TEXTO_APAGADO),
+                );
+            });
+        });
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             for (pestana, texto) in [
@@ -135,6 +182,14 @@ impl Ventana {
 
         egui::Panel::bottom("acciones").show(ui, |ui| {
             ui.add_space(12.0);
+            if let Some(equipo) = self.aplicacion.equipo() {
+                ui.label(
+                    RichText::new(equipo)
+                        .size(tema::TAMANO_PEQUENO)
+                        .color(tema::TEXTO_SECUNDARIO),
+                );
+                ui.add_space(8.0);
+            }
             ui.horizontal_wrapped(|ui| {
                 if boton(ui, textos::BOTON_AGREGAR, tema::MORADO, edicion) {
                     ordenes.push(Orden::Agregar);
@@ -375,6 +430,7 @@ fn boton(ui: &mut egui::Ui, texto: &str, color: Color32, activo: bool) -> bool {
 
 impl eframe::App for Ventana {
     fn logic(&mut self, _contexto: &egui::Context, _marco: &mut eframe::Frame) {
+        self.recoger_aviso_de_version();
         loop {
             match self.trabajador.recoger() {
                 Ok(Some(resultado)) => self.aplicacion.terminar(resultado),

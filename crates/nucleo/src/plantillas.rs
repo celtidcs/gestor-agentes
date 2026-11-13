@@ -37,6 +37,11 @@ const PUNTERO_CLAUDE: &[u8] = include_bytes!("../plantillas/instrucciones/punter
 const AVISO_ARCHIVADOS: &[u8] = include_bytes!("../plantillas/instrucciones/aviso-archivados.md");
 const CONSULTA_CODIGO: &[u8] = include_bytes!("../plantillas/consulta/codigo.md");
 const CONSULTA_METODO: &[u8] = include_bytes!("../plantillas/consulta/metodo.md");
+const CONSULTA_VERIFICACION: &[u8] = include_bytes!("../plantillas/consulta/verificacion.md");
+const CONSULTA_PROGRAMATOR: &[u8] = include_bytes!("../plantillas/consulta/programator.md");
+const MENSAJE_INICIAL: &[u8] = include_bytes!("../plantillas/instrucciones/mensaje-inicial.md");
+const VIGILANTE_BASH: &[u8] = include_bytes!("../plantillas/vigilante/vigilar-canal.sh");
+const VIGILANTE_POWERSHELL: &[u8] = include_bytes!("../plantillas/vigilante/vigilar-canal.ps1");
 const INSTRUCCIONES_DEL_PROYECTO: &[u8] =
     include_bytes!("../plantillas/gestor/instrucciones-del-proyecto.md");
 const ESTADO: &[u8] = include_bytes!("../plantillas/gestor/estado.md");
@@ -115,13 +120,23 @@ impl EsqueletoGestor {
 pub enum DocumentoDeConsulta {
     /// Estándares de código: se lee antes de escribir, cambiar o revisar código.
     Codigo,
-    /// Control del proyecto, registro de funciones, documentación y publicación.
+    /// Bloque pendiente, control del proyecto, registro de funciones, documentación y
+    /// publicación.
     Metodo,
+    /// Puertas, mutaciones de control y registros: se lee antes de verificar o entregar.
+    Verificacion,
+    /// Cómo se le encarga trabajo a Programator: se lee antes de encargarle algo.
+    Programator,
 }
 
 impl DocumentoDeConsulta {
     /// Todos los documentos de consulta.
-    pub const TODOS: [Self; 2] = [Self::Codigo, Self::Metodo];
+    pub const TODOS: [Self; 4] = [
+        Self::Codigo,
+        Self::Metodo,
+        Self::Verificacion,
+        Self::Programator,
+    ];
 
     /// Ruta relativa al proyecto, con barras normales.
     #[must_use]
@@ -129,6 +144,8 @@ impl DocumentoDeConsulta {
         match self {
             Self::Codigo => ".gestor/consulta/codigo.md",
             Self::Metodo => ".gestor/consulta/metodo.md",
+            Self::Verificacion => ".gestor/consulta/verificacion.md",
+            Self::Programator => ".gestor/consulta/programator.md",
         }
     }
 
@@ -138,8 +155,54 @@ impl DocumentoDeConsulta {
         leer(match self {
             Self::Codigo => CONSULTA_CODIGO,
             Self::Metodo => CONSULTA_METODO,
+            Self::Verificacion => CONSULTA_VERIFICACION,
+            Self::Programator => CONSULTA_PROGRAMATOR,
         })
     }
+}
+
+/// Guion del vigilante del canal que Gestor Agentes escribe en .gestor/vigilante/. Cada agente
+/// lo arma al arrancar, como dice la cabecera de AGENTS.md: en modo continuo con el Monitor de
+/// Claude Code, o en una sola pasada al terminar cada paso en las herramientas sin aviso
+/// automático.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GuionDelVigilante {
+    /// Versión de bash, para Linux y para el bash de Git en Windows.
+    Bash,
+    /// Versión de Windows PowerShell 5.1. Solo lleva ASCII, porque PowerShell 5.1 lee como ANSI
+    /// un .ps1 sin marca BOM.
+    PowerShell,
+}
+
+impl GuionDelVigilante {
+    /// Los dos guiones.
+    pub const TODOS: [Self; 2] = [Self::Bash, Self::PowerShell];
+
+    /// Ruta relativa al proyecto, con barras normales.
+    #[must_use]
+    pub const fn ruta_relativa(self) -> &'static str {
+        match self {
+            Self::Bash => ".gestor/vigilante/vigilar-canal.sh",
+            Self::PowerShell => ".gestor/vigilante/vigilar-canal.ps1",
+        }
+    }
+
+    /// Texto vigente del guion.
+    #[must_use]
+    pub fn texto(self) -> String {
+        leer(match self {
+            Self::Bash => VIGILANTE_BASH,
+            Self::PowerShell => VIGILANTE_POWERSHELL,
+        })
+    }
+}
+
+/// Primer mensaje que el lanzador manda a Claude Code, codex y agy al abrirlos, para que ejecuten
+/// el arranque de AGENTS.md sin esperar a que el usuario escriba. Es una sola línea y no lleva
+/// caracteres que cmd.exe interprete, porque a codex.cmd le llega a través de él.
+#[must_use]
+pub fn mensaje_inicial() -> String {
+    leer(MENSAJE_INICIAL)
 }
 
 /// Texto del núcleo común del archivo único de reglas.

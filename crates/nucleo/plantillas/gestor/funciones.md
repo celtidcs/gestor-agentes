@@ -1,5 +1,13 @@
-Registro de funciones de {{AGENTE}}
+# Registro de funciones de {{AGENTE}}
 
-Por cada función que {{AGENTE}} haya asumido se anotan los encargos asumidos, los aceptados, las paradas por la regla de los dos intentos y los rechazos recibidos, citando el acta del revisor, y si la función está activa o autoexcluida. La regla de autoexclusión está en el núcleo común.
+Por cada función que {{AGENTE}} haya asumido se anotan:
+- encargos asumidos y aceptados;
+- paradas por la regla de los dos intentos;
+- rechazos recibidos, citando el acta del revisor;
+- si la función está activa o autoexcluida.
+
+La regla de autoexclusión está en `.gestor/consulta/metodo.md`.
+
+## Funciones
 
 Sin funciones registradas.

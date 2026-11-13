@@ -13,6 +13,77 @@ use crate::perfiles::Disponibilidad;
 /// Título de la ventana y encabezado.
 pub const TITULO: &str = "Gestor Agentes";
 
+/// Versión que se ve en la esquina superior derecha de la ventana.
+#[must_use]
+pub fn version_visible(version: &str) -> String {
+    format!("v{version}")
+}
+
+/// Minutos de una hora y horas a partir de las cuales la antigüedad de un latido se dice en días:
+/// dos días en horas todavía se leen bien; más, no.
+const MINUTOS_POR_HORA: i64 = 60;
+const HORAS_ANTES_DE_DECIR_DIAS: i64 = 48;
+const HORAS_POR_DIA: i64 = 24;
+
+/// Antigüedad de un latido, como «hace 5 min», «hace 3 h» o «hace 4 días».
+#[must_use]
+pub fn antiguedad(minutos: i64) -> String {
+    if minutos < 1 {
+        return "ahora".to_owned();
+    }
+    if minutos < MINUTOS_POR_HORA {
+        return format!("hace {minutos} min");
+    }
+    let horas = minutos / MINUTOS_POR_HORA;
+    if horas < HORAS_ANTES_DE_DECIR_DIAS {
+        return format!("hace {horas} h");
+    }
+    format!("hace {} días", horas / HORAS_POR_DIA)
+}
+
+/// Línea del estado del equipo del proyecto seleccionado: Jefe, último latido de cada agente,
+/// reservas y alertas.
+#[must_use]
+pub fn linea_del_equipo(
+    resumen: &nucleo::proyecto::revision_del_canal::ResumenDelEquipo,
+    ahora: chrono::NaiveDateTime,
+) -> String {
+    let mut partes = vec![match &resumen.jefe {
+        Some(jefe) => format!("Jefe: {jefe}"),
+        None => "Jefe sin asignar".to_owned(),
+    }];
+    for latido in &resumen.latidos {
+        let minutos = (ahora - latido.momento).num_minutes();
+        partes.push(format!("{} {}", latido.identificador, antiguedad(minutos)));
+    }
+    partes.push(match resumen.reservas {
+        0 => "sin reservas".to_owned(),
+        1 => "1 reserva".to_owned(),
+        n => format!("{n} reservas"),
+    });
+    if resumen.mutaciones_vivas {
+        partes.push("MUTACIONES VIVAS".to_owned());
+    }
+    if resumen.autoexclusiones {
+        partes.push("autoexclusiones vigentes".to_owned());
+    }
+    format!("Equipo · {}", partes.join(" · "))
+}
+
+/// Título del aviso de versión nueva.
+pub const TITULO_ACTUALIZACION: &str = "Actualización disponible";
+
+/// Texto del aviso de versión nueva: cuál hay, cuál tienes y dónde se descarga.
+#[must_use]
+pub fn actualizacion_disponible(nueva: &str, instalada: &str, enlace: &str) -> String {
+    format!(
+        "Hay una versión nueva de Gestor Agentes, la {nueva}. Tienes la {instalada}.\n\n\
+         Puedes descargarla de su página en GitHub:\n{enlace}\n\n\
+         Descarga el paquete de tu sistema y sustituye el programa conservando tu carpeta \
+         datos, que guarda tu configuración."
+    )
+}
+
 /// Pestaña de la lista de proyectos.
 pub const PESTANA_PROYECTOS: &str = "Proyectos";
 

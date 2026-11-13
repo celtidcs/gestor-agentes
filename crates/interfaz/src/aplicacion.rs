@@ -8,8 +8,10 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use chrono::NaiveDateTime;
 use nucleo::configuracion::{ErrorDeConfiguracion, PerfilDeAgente, ProyectoRegistrado};
 use nucleo::proyecto::estado::EstadoDelProyecto;
+use nucleo::proyecto::revision_del_canal::ResumenDelEquipo;
 
 use crate::orden::{self, ClaveDeOrden};
 use crate::perfiles::{self, Disponibilidad};
@@ -47,6 +49,11 @@ pub trait Servicios {
     fn existe_archivo(&self, ruta: &Path) -> bool;
     /// Carpeta personal del usuario, para sustituir «~» en las rutas.
     fn carpeta_personal(&self) -> Option<PathBuf>;
+    /// Cómo está el equipo del proyecto, leído de su .gestor/canal/, y la hora local con la que
+    /// se calcula la antigüedad de los latidos. Nada si el proyecto no tiene estado del canal.
+    fn equipo_del_proyecto(&self, _carpeta: &Path) -> Option<(ResumenDelEquipo, NaiveDateTime)> {
+        None
+    }
 }
 
 /// Fila de la tabla de proyectos, con lo que se muestra ya calculado para no leer el disco en
@@ -119,6 +126,8 @@ pub struct Aplicacion {
     estado: String,
     dialogos: VecDeque<Dialogo>,
     ocupada: bool,
+    /// Línea con el estado del equipo del proyecto seleccionado, ya compuesta.
+    equipo: Option<String>,
 }
 
 impl Aplicacion {
@@ -141,6 +150,7 @@ impl Aplicacion {
             estado: String::new(),
             dialogos: VecDeque::new(),
             ocupada: false,
+            equipo: None,
         };
         match proyectos {
             Ok(proyectos) => {
@@ -317,11 +327,28 @@ impl Aplicacion {
         self.edicion_activa() && self.fila_seleccionada().is_some()
     }
 
-    /// Selecciona el proyecto de esa ruta.
+    /// Selecciona el proyecto de esa ruta y lee cómo está su equipo.
     pub fn seleccionar(&mut self, ruta: &str) {
         if self.filas.iter().any(|fila| fila.registro.ruta() == ruta) {
             self.seleccion = Some(ruta.to_owned());
+            self.leer_equipo();
         }
+    }
+
+    /// Línea con el estado del equipo del proyecto seleccionado, si tiene estado del canal.
+    #[must_use]
+    pub fn equipo(&self) -> Option<&str> {
+        self.equipo.as_deref()
+    }
+
+    /// Vuelve a leer el equipo del proyecto seleccionado. Son unos pocos archivos pequeños de
+    /// .gestor/canal/, y se leen al seleccionar y al terminar un trabajo, no en cada fotograma.
+    fn leer_equipo(&mut self) {
+        self.equipo = self.seleccion.as_deref().and_then(|ruta| {
+            self.servicios
+                .equipo_del_proyecto(Path::new(ruta))
+                .map(|(resumen, ahora)| textos::linea_del_equipo(&resumen, ahora))
+        });
     }
 
     /// Pide el selector de carpetas para añadir un proyecto.
@@ -490,6 +517,8 @@ impl Aplicacion {
             },
             ResultadoDeTrabajo::EjecutableElegido { ruta: None, .. } => {}
         }
+        // Un trabajo, como abrir un agente, puede haber cambiado el canal del proyecto.
+        self.leer_equipo();
     }
 
     /// Pone los perfiles detectados y su disponibilidad; si hay cuentas nuevas, los guarda. Si no

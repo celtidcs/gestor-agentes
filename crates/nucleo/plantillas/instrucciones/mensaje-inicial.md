@@ -1,0 +1,1 @@
+Gestor Agentes acaba de abrir esta sesión. Antes de cualquier otra cosa, ejecuta ahora el apartado Arranque obligatorio de AGENTS.md, paso a paso y en orden, sin saltarte ninguno. Si estado.md no dice todavía si eres Jefe o ayudante, pregúntaselo al Director y espera su respuesta. Termina con el resumen que pide el último paso.

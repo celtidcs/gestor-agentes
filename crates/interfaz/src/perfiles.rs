@@ -69,6 +69,8 @@ fn personal_o_tilde(carpeta_personal: Option<&Path>) -> PathBuf {
 }
 
 /// Petición de lanzamiento del perfil en un proyecto, con «~» sustituida por la carpeta personal.
+/// Lleva el mensaje inicial del núcleo, para que el agente ejecute el arranque de AGENTS.md al
+/// abrirse.
 #[must_use]
 pub fn peticion(
     perfil: &PerfilDeAgente,
@@ -85,6 +87,7 @@ pub fn peticion(
         directorio_configuracion: perfil.directorio_configuracion_expandido(&personal),
         ejecutable: perfil.ejecutable_expandido(&personal),
         argumentos_extra: perfil.argumentos().to_vec(),
+        mensaje_inicial: Some(nucleo::plantillas::mensaje_inicial()),
     }
 }
 

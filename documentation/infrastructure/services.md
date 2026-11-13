@@ -1,6 +1,6 @@
 Programas externos
 
-Gestor Agentes no se conecta a ningún servicio. Trabaja con los programas siguientes, que se ejecutan como procesos locales y se ocupan por su cuenta de conectarse con sus proveedores. Cómo instalar cada agente con el método oficial de su fabricante se explica en el manual de uso, usage.md.
+Gestor Agentes solo se conecta a un servicio, la API de GitHub, y solo para saber si hay una versión nueva, como se explica en el último apartado. Trabaja además con los programas siguientes, que se ejecutan como procesos locales y se ocupan por su cuenta de conectarse con sus proveedores. Cómo instalar cada agente con el método oficial de su fabricante se explica en el manual de uso, usage.md.
 
 
 Claude Code, de Anthropic
@@ -26,3 +26,8 @@ Programator no tiene un sitio habitual de instalación, así que la aplicación 
 Git
 
 Gestor Agentes usa git para comprobar si cada proyecto es un repositorio y crearlo si no lo es. Solo ejecuta rev-parse e init, siempre con la opción safe.directory en la propia orden, y nunca modifica la configuración global de git. No hace commits ni envía nada a ningún repositorio remoto: eso lo deciden el usuario y sus agentes.
+
+
+API de GitHub
+
+Al arrancar, si ComprobarActualizaciones vale true en datos/ajustes.json, la aplicación hace una sola petición GET, sin autenticación, a https://api.github.com/repos/<repositorio>/releases/latest, donde el repositorio es RepositorioDeActualizaciones, celtidcs/gestor-agentes por defecto. Es la operación pública Get the latest release de la API de releases (https://docs.github.com/en/rest/releases/releases#get-the-latest-release). La petición lleva solo dos cabeceras: User-Agent con el nombre y la versión del programa, que la API exige, y Accept con el tipo de contenido que recomienda GitHub. No lleva ningún dato del usuario ni de su equipo. Va cifrada con TLS y espera como mucho TiempoMaximoActualizacionSegundos. Sin autenticación, GitHub admite un número limitado de peticiones por hora desde cada dirección, de sobra para una por arranque. Si falla, la aplicación no avisa de nada y sigue igual.

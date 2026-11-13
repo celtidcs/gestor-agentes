@@ -3,7 +3,7 @@ Arquitectura
 
 Visión general
 
-Gestor Agentes 3.0.0 es una aplicación de escritorio de una sola ventana, sin servidor ni base de datos, escrita en Rust. Guarda todo en unos pocos archivos de texto dentro de la carpeta datos, junto al ejecutable, y por eso es portable. El workspace de cargo tiene tres crates.
+Gestor Agentes es una aplicación de escritorio de una sola ventana, sin servidor ni base de datos, escrita en Rust. Guarda todo en unos pocos archivos de texto dentro de la carpeta datos, junto al ejecutable, y por eso es portable. El workspace de cargo tiene tres crates.
 
 El crate nucleo es una biblioteca sin interfaz ni dependencias de plataforma. Contiene la lógica que escribe en los proyectos del usuario: las identidades de los agentes, la configuración y los ajustes, las instrucciones del proyecto, la estructura de la carpeta .gestor, el archivo de lo que usaba el sistema anterior, git y la detección de cuentas. Es la parte crítica y la más cubierta por pruebas.
 
@@ -47,13 +47,13 @@ En el cuarto crea lo que falte de .gestor para la instancia 1 de cada herramient
 
 En el quinto crea .gestor/instrucciones-del-proyecto.md si falta, con lo recogido en el segundo paso dentro de un bloque pendiente de consolidar. Si ya existe, no lo toca nunca.
 
-En el sexto escribe enteros AGENTS.md, con la cabecera común, el núcleo común y las normas del espacio de trabajo que encuentra el localizador; CLAUDE.md, el puntero que carga AGENTS.md y el archivo propio; y los documentos de .gestor/consulta. Si lo que había no es lo último que escribió la aplicación, antes lo copia en .gestor/respaldos.
+En el sexto escribe enteros AGENTS.md, con la cabecera común, el núcleo común y las normas del espacio de trabajo que encuentra el localizador; CLAUDE.md, el puntero que carga AGENTS.md y el archivo propio; los documentos de .gestor/consulta y los guiones del vigilante de .gestor/vigilante. Si lo que había no es lo último que escribió la aplicación, antes lo copia en .gestor/respaldos.
 
 En el séptimo avisa de las bandejas del canal que pasan del límite de ajustes.json.
 
 En el octavo guarda en .gestor/regiones-gestionadas.json la huella de lo que ha escrito.
 
-Con el informe ya devuelto, el lanzador planifica la apertura y la ejecuta. Claude Code recibe las variables GESTOR_AGENTE y CLAUDE_CONFIG_DIR; codex, GESTOR_AGENTE y CODEX_HOME; agy y Programator, solo GESTOR_AGENTE. Todos se abren en una terminal nueva. Al arrancar, la interfaz usa detectar_ejecutable, que es la misma búsqueda que hace el lanzamiento, para mostrar solo los botones de los agentes que hay en el equipo.
+Con el informe ya devuelto, el lanzador planifica la apertura y la ejecuta. Claude Code recibe las variables GESTOR_AGENTE y CLAUDE_CONFIG_DIR; codex, GESTOR_AGENTE y CODEX_HOME; agy y Programator, solo GESTOR_AGENTE. Todos se abren en una terminal nueva. Claude Code, codex y agy reciben además el mensaje inicial del núcleo, que la interfaz pone en la petición: los dos primeros como último argumento y agy detrás de su opción -i. Al arrancar, la interfaz usa detectar_ejecutable, que es la misma búsqueda que hace el lanzamiento, para mostrar solo los botones de los agentes que hay en el equipo.
 
 
 Decisiones técnicas
@@ -66,9 +66,19 @@ Archivos escritos enteros y un archivo propio aparte. La aplicación es dueña d
 
 Huellas en lugar de comparar con la plantilla. Comparar un archivo solo con la plantilla vigente no distingue una plantilla vieja de una edición a mano. La huella de lo último que se escribió sí lo distingue, y decide cuándo hace falta respaldo.
 
-Documentos de consulta. Lo que solo se necesita en momentos concretos, como los estándares de código o el método de documentación y publicación, va en .gestor/consulta, para que AGENTS.md quepa en lo que leen las herramientas: 24.000 bytes Antigravity y 32.768 Codex.
+Documentos de consulta. Lo que solo se necesita en momentos concretos, como los estándares de código, el detalle de la verificación o el método de documentación y publicación, va en .gestor/consulta, para que AGENTS.md sea corto y quepa holgado en lo que leen las herramientas: 24.000 bytes Antigravity y 32.768 Codex.
+
+Mensaje inicial. Las herramientas no hacen nada hasta recibir un mensaje, y las instrucciones que cargan al abrirse las tratan como contexto, no como una tarea. Sin un primer mensaje, el agente no ejecutaba su arranque hasta que el usuario le escribía, y entonces atendía lo que le pedían antes que el arranque. El mensaje inicial convierte el arranque en la primera tarea de la sesión.
+
+Vigilante en guiones. Cada herramienta tiene una forma distinta de vigilar, o ninguna. Los guiones de .gestor/vigilante dan una orden concreta y la misma para todas, con un modo continuo para las que pueden vigilar en segundo plano y otro de una pasada para las que no. Toman la identidad de GESTOR_AGENTE, como el resto del sistema.
 
 Plantillas incluidas en el binario. El núcleo común viaja dentro del ejecutable y cambia con cada versión, así que todos los proyectos reciben el mismo texto.
+
+Aviso de versión. La decisión es pura y vive en el núcleo, en actualizaciones.rs: construye la dirección de la API de releases, lee la respuesta, valida que el enlace sea del propio repositorio en GitHub y compara las versiones con SemVer. La petición la hace la interfaz, en actualizaciones.rs y sistema.rs, con ureq y TLS de rustls para no depender del OpenSSL del sistema, en un hilo propio y no en el de los trabajos, para que una red lenta no retrase la apertura de un proyecto. El consultor se inyecta y las pruebas no usan la red; el ejemplo ultima_publicacion consulta la API de verdad.
+
+Revisión del canal. proyecto/revision_del_canal.rs es lógica pura: recibe el texto de estado.md, el de las bandejas y la hora, y devuelve avisos y el resumen del equipo. Solo comprueba la forma, porque esos archivos los escriben modelos de lenguaje y un análisis más fino sería frágil. El inicializador pone sus avisos en el informe, como el de las bandejas sin podar, y la interfaz usa el resumen para la línea del equipo, leída al seleccionar un proyecto y al terminar un trabajo, no en cada fotograma.
+
+Lo antiguo se aparta y se borra al consolidar. La experiencia de los primeros proyectos migrados enseñó que los archivos del sistema anterior que se dejaban a la vista acababan confundiendo a los agentes. La aplicación los aparta, incluidas las reglas que agy carga desde .agents, y las instrucciones prohíben seguirlos; el agente que consolida los borra cuando ha rescatado lo que siga vivo. La aplicación no borra nunca, para que nada se pierda por un error suyo.
 
 Normas del espacio de trabajo copiadas. El localizador busca el CLAUDE.md, AGENTS.md o GEMINI.md más cercano por encima del proyecto que no sea un archivo gestionado, y su texto va al final de AGENTS.md. Se copia porque Codex y Gemini no leen nada por encima de la raíz del repositorio.
 

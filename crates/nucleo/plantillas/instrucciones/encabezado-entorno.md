@@ -1,4 +1,3 @@
-Instrucciones del espacio de trabajo
+# Normas de la carpeta proyecto
 
-Gestor Agentes copia aquí automáticamente, cada vez que lanza un agente en este proyecto, el contenido de {{RUTA}}, que reúne las normas comunes a todos los proyectos de esa carpeta. Obligan igual que el resto de este archivo. Para cambiarlas se edita ese archivo, nunca este bloque, que se sobrescribe en el siguiente lanzamiento.
-
+Gestor Agentes copia aquí, en cada lanzamiento, el contenido de `{{RUTA}}`, con las normas comunes a todos los proyectos de esa carpeta. Obligan igual que el resto de este archivo. Para cambiarlas se edita ese archivo, nunca este bloque, que se sobrescribe en el siguiente lanzamiento.

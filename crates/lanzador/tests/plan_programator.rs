@@ -35,7 +35,7 @@ fn programator_recibe_ruta_del_proyecto_y_trabaja_en_la_carpeta_de_su_ejecutable
     {
         let plan = plan(&p, Sistema::Windows, &entorno);
         assert_eq!(plan.programa, ejecutable);
-        assert_eq!(textos(&plan.argumentos), ["--ruta", "/proyectos/MMCelt"]);
+        assert_eq!(textos(&plan.argumentos), ["--ruta", "/proyectos/Demo"]);
         assert_eq!(plan.carpeta, carpeta);
         assert_eq!(variables(&plan), [par("GESTOR_AGENTE", "Programator 1")]);
     }

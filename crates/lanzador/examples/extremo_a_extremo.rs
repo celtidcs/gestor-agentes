@@ -60,6 +60,7 @@ fn comprobar_en(raiz: &Path) -> Result<(), String> {
         directorio_configuracion: Some(configuracion.clone()),
         ejecutable: Some(guion),
         argumentos_extra: Vec::new(),
+        mensaje_inicial: None,
     };
     let plan = match planificar(&peticion, Sistema::actual(), &EntornoReal) {
         Ok(plan) => plan,

@@ -57,6 +57,7 @@ fn lanzar(raiz: &Path) -> Result<(), String> {
         directorio_configuracion: None,
         ejecutable: Some(guion),
         argumentos_extra: Vec::new(),
+        mensaje_inicial: None,
     };
     match planificar(&peticion, Sistema::actual(), &EntornoReal) {
         Ok(plan) => ejecutar(&plan).map_err(|e| e.to_string()),

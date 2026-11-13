@@ -251,6 +251,26 @@ fn peticion_expande_la_carpeta_personal() {
 }
 
 #[test]
+fn peticion_lleva_el_mensaje_inicial_del_nucleo() {
+    for herramienta in [
+        HerramientaDelPerfil::Claude,
+        HerramientaDelPerfil::Codex,
+        HerramientaDelPerfil::Gemini,
+    ] {
+        let peticion = perfiles::peticion(
+            &perfil(herramienta, 1),
+            "Uno",
+            Path::new("/p/uno"),
+            Some(Path::new("/home/u")),
+        );
+        assert_eq!(
+            peticion.mensaje_inicial,
+            Some(nucleo::plantillas::mensaje_inicial())
+        );
+    }
+}
+
+#[test]
 fn peticion_sin_carpeta_personal_deja_la_virgulilla_a_la_vista() {
     let claude = perfil(HerramientaDelPerfil::Claude, 1).con_directorio("~/.claude");
     let peticion = perfiles::peticion(&claude, "Uno", Path::new("/p/uno"), None);

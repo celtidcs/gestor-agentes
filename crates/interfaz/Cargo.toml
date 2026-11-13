@@ -19,6 +19,9 @@ thiserror = "2"
 eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "x11", "wayland", "accesskit"] }
 # Selector de carpetas y diálogo de error del sistema.
 rfd = "0.18"
+# Consulta de la última versión publicada en GitHub: cliente HTTP con TLS de rustls, sin OpenSSL
+# del sistema, y sin compresión ni JSON propios (la respuesta la lee el núcleo con serde_json).
+ureq = { version = "2.12", default-features = false, features = ["tls"] }
 
 # Icono del ejecutable en Windows: compila el recurso con el rc.exe del Windows SDK, que
 # busca en el registro. Sin funciones por defecto, que solo sirven para leer metadatos de Cargo.toml.

@@ -6,14 +6,15 @@
 //! 2. Si falta el archivo propio del proyecto (.gestor/instrucciones-del-proyecto.md), lectura del
 //!    texto propio que haya en los archivos de instrucciones anteriores. Va antes del paso 3
 //!    porque ese paso se lleva GEMINI.md.
-//! 3. Archivo de los archivos del sistema anterior (canal antiguo de Gemini, GEMINI.md y memoria
-//!    compartida).
+//! 3. Archivo de los archivos del sistema anterior (canal antiguo de Gemini, GEMINI.md, memoria
+//!    compartida y reglas de agy en .agents/).
 //! 4. Estructura de .gestor/ (canal, bandejas, diarios, actas, registros y órdenes).
 //! 5. Archivo propio del proyecto: se crea si falta, con lo recogido en el paso 2 y la lista de
 //!    lo archivado en el paso 3. Si ya existe no se toca nunca.
 //! 6. Archivos que la aplicación escribe enteros: AGENTS.md, CLAUDE.md y los documentos de
 //!    consulta, con copia previa de lo que no hubiera escrito ella.
-//! 7. Aviso de las bandejas del canal que han crecido demasiado.
+//! 7. Aviso de las bandejas del canal que han crecido demasiado y de lo que no cuadra en el estado
+//!    del canal (apartados, mutaciones vivas y reservas), con [`revision_del_canal`].
 //! 8. Registro de huellas de lo escrito.
 //!
 //! Un paso que falla se anota en el informe y no impide los siguientes. Nada se sustituye en
@@ -31,6 +32,7 @@ use super::informe::{InformeDeInicializacion, TipoDeCambio};
 use super::localizador::FuenteDeEntorno;
 use super::momento::{Momento, Reloj};
 use super::registro_de_huellas::{self, RegistroDeHuellas};
+use super::revision_del_canal;
 use super::sistema_anterior;
 use crate::agentes::{IdentidadAgente, TipoAgente, CARPETA_CANAL};
 use crate::git::{self, ServicioGit};
@@ -44,8 +46,31 @@ use crate::textos;
 /// Marcador de la fecha en el encabezado del bloque pendiente de consolidar.
 const MARCADOR_FECHA: &str = "{{FECHA}}";
 
-/// Archivo del canal que no es una bandeja.
-const ARCHIVO_DE_ESTADO: &str = "estado.md";
+/// Archivos del canal que no son la bandeja de nadie, en minúsculas: el estado común y los que
+/// Programator reserva en su propio canal (src/protocolo/canal.rs del proyecto Programator), entre
+/// ellos la guía COMO-ENCARGAR-A-PROGRAMATOR.md que publica al arrancar.
+pub const ARCHIVOS_DEL_CANAL_QUE_NO_SON_BANDEJAS: [&str; 4] = [
+    "estado.md",
+    "readme.md",
+    "indice.md",
+    "como-encargar-a-programator.md",
+];
+
+/// Prefijos de los históricos que se guardan en el canal, con y sin tilde, como los reconoce
+/// Programator. Un histórico no es una bandeja viva.
+pub const PREFIJOS_DE_HISTORICO: [&str; 2] = ["historico-", "histórico-"];
+
+/// Indica si un archivo de .gestor/canal/ es la bandeja de un agente: un .md que no es uno de
+/// [`ARCHIVOS_DEL_CANAL_QUE_NO_SON_BANDEJAS`] ni un histórico. No distingue mayúsculas.
+#[must_use]
+pub fn es_bandeja(nombre: &str) -> bool {
+    let nombre = nombre.to_lowercase();
+    nombre.ends_with(".md")
+        && !ARCHIVOS_DEL_CANAL_QUE_NO_SON_BANDEJAS.contains(&nombre.as_str())
+        && !PREFIJOS_DE_HISTORICO
+            .iter()
+            .any(|prefijo| nombre.starts_with(prefijo))
+}
 
 /// Configuración del usuario que necesita la inicialización.
 pub trait ConfiguracionDeInstrucciones {
@@ -57,6 +82,12 @@ pub trait ConfiguracionDeInstrucciones {
     /// defecto, el de [`crate::ajustes::LIMITE_DE_BANDEJA_POR_DEFECTO`].
     fn limite_de_bandeja(&self) -> u64 {
         crate::ajustes::LIMITE_DE_BANDEJA_POR_DEFECTO
+    }
+
+    /// Horas sin latido tras las que una reserva se da por huérfana. Por defecto, las de
+    /// [`crate::ajustes::LIMITE_DE_LATIDO_POR_DEFECTO`].
+    fn limite_de_latido_horas(&self) -> u64 {
+        crate::ajustes::LIMITE_DE_LATIDO_POR_DEFECTO
     }
 }
 
@@ -153,6 +184,10 @@ impl<'a> InicializadorDeProyecto<'a> {
         paso(&mut informe, CARPETA_CANAL, |informe| {
             avisar_bandejas_grandes(raiz, self.configuracion.limite_de_bandeja(), informe)
         });
+        let limite_de_latido = self.configuracion.limite_de_latido_horas();
+        paso(&mut informe, ARCHIVO_DE_ESTADO_DEL_CANAL, |informe| {
+            avisar_del_canal(raiz, momento, limite_de_latido, informe)
+        });
         paso(&mut informe, registro_de_huellas::RUTA_RELATIVA, |_| {
             registro.guardar(raiz)
         });
@@ -167,9 +202,17 @@ impl<'a> InicializadorDeProyecto<'a> {
         raiz: &Path,
         informe: &mut InformeDeInicializacion,
     ) -> TextoPropio {
-        let mut leidos: Vec<(&str, String)> = Vec::new();
-        for ruta_relativa in catalogo::ARCHIVOS_DE_INSTRUCCIONES_ANTERIORES {
-            match archivos::leer(&archivos::ruta(raiz, ruta_relativa)) {
+        let mut rutas: Vec<String> = catalogo::ARCHIVOS_DE_INSTRUCCIONES_ANTERIORES
+            .iter()
+            .map(|ruta| (*ruta).to_owned())
+            .collect();
+        match sistema_anterior::reglas_de_agy(raiz) {
+            Ok(reglas) => rutas.extend(reglas),
+            Err(error) => informe.anotar_error(format!(".agents/: {error}")),
+        }
+        let mut leidos: Vec<(String, String)> = Vec::new();
+        for ruta_relativa in rutas {
+            match archivos::leer(&archivos::ruta(raiz, &ruta_relativa)) {
                 Ok(Some((texto, _))) => leidos.push((ruta_relativa, texto)),
                 Ok(None) => {}
                 Err(error) => informe.anotar_error(format!("{ruta_relativa}: {error}")),
@@ -178,7 +221,7 @@ impl<'a> InicializadorDeProyecto<'a> {
         let anteriores: Vec<ArchivoAnterior<'_>> = leidos
             .iter()
             .map(|(ruta_relativa, texto)| ArchivoAnterior {
-                ruta_relativa,
+                ruta_relativa: ruta_relativa.as_str(),
                 texto,
             })
             .collect();
@@ -290,15 +333,13 @@ fn mantener_entero(
 }
 
 /// Bandejas del canal que pasan de `limite` bytes, ordenadas por nombre, a partir del nombre y el
-/// tamaño de cada archivo de .gestor/canal/. Cuenta como bandeja todo archivo .md salvo
-/// estado.md, que no tiene dueño que lo pode. No toca el disco.
+/// tamaño de cada archivo de .gestor/canal/. Solo cuentan las bandejas ([`es_bandeja`]): estado.md,
+/// la guía de Programator y los históricos no tienen dueño que los pode. No toca el disco.
 #[must_use]
 pub fn bandejas_sin_podar(entradas: &[(String, u64)], limite: u64) -> Vec<(String, u64)> {
     let mut grandes: Vec<(String, u64)> = entradas
         .iter()
-        .filter(|(nombre, tamano)| {
-            nombre.ends_with(".md") && nombre != ARCHIVO_DE_ESTADO && *tamano > limite
-        })
+        .filter(|(nombre, tamano)| es_bandeja(nombre) && *tamano > limite)
         .cloned()
         .collect();
     grandes.sort();
@@ -332,6 +373,78 @@ fn avisar_bandejas_grandes(
         ));
     }
     Ok(())
+}
+
+/// Ruta del estado del canal dentro del proyecto.
+const ARCHIVO_DE_ESTADO_DEL_CANAL: &str = ".gestor/canal/estado.md";
+
+/// Revisa el estado del canal y las bandejas ([`revision_del_canal::revisar`]) y pone en el
+/// informe un aviso por cada cosa que no cuadra. Sin estado.md no hay nada que revisar.
+fn avisar_del_canal(
+    raiz: &Path,
+    momento: Momento,
+    limite_horas: u64,
+    informe: &mut InformeDeInicializacion,
+) -> io::Result<()> {
+    let Some((estado, _)) = archivos::leer(&archivos::ruta(raiz, ARCHIVO_DE_ESTADO_DEL_CANAL))?
+    else {
+        return Ok(());
+    };
+    let Some(ahora) = momento.como_fecha_y_hora() else {
+        return Ok(());
+    };
+    let bandejas = leer_bandejas(raiz)?;
+    for aviso in revision_del_canal::revisar(&estado, &bandejas, ahora, limite_horas) {
+        informe.anotar_aviso(texto_del_aviso(&aviso, limite_horas));
+    }
+    Ok(())
+}
+
+/// Las bandejas del canal ([`es_bandeja`]) con su texto, por orden de nombre.
+///
+/// # Errors
+///
+/// El error de disco al leer el canal o una bandeja.
+pub fn leer_bandejas(raiz: &Path) -> io::Result<Vec<revision_del_canal::Bandeja>> {
+    let carpeta = archivos::ruta(raiz, CARPETA_CANAL);
+    let entradas = match fs::read_dir(&carpeta) {
+        Ok(entradas) => entradas,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut bandejas = Vec::new();
+    for entrada in entradas {
+        let entrada = entrada?;
+        let nombre = entrada.file_name().to_string_lossy().into_owned();
+        if !es_bandeja(&nombre) {
+            continue;
+        }
+        if let Some((texto, _)) = archivos::leer(&entrada.path())? {
+            bandejas.push(revision_del_canal::Bandeja { nombre, texto });
+        }
+    }
+    bandejas.sort_by(|a, b| a.nombre.cmp(&b.nombre));
+    Ok(bandejas)
+}
+
+/// Texto del aviso que ve el usuario.
+fn texto_del_aviso(aviso: &revision_del_canal::AvisoDelCanal, limite_horas: u64) -> String {
+    use revision_del_canal::AvisoDelCanal;
+    match aviso {
+        AvisoDelCanal::FaltaApartado(apartado) => {
+            textos::estado_sin_apartado(ARCHIVO_DE_ESTADO_DEL_CANAL, apartado)
+        }
+        AvisoDelCanal::MutacionesVivas => textos::mutaciones_vivas(ARCHIVO_DE_ESTADO_DEL_CANAL),
+        AvisoDelCanal::ReservaIlegible(linea) => {
+            textos::reserva_ilegible(ARCHIVO_DE_ESTADO_DEL_CANAL, linea)
+        }
+        AvisoDelCanal::ReservaRepetida { ruta, agentes } => {
+            textos::reserva_repetida(ruta, &agentes.0, &agentes.1)
+        }
+        AvisoDelCanal::ReservaSinLatido { agente, horas } => {
+            textos::reserva_sin_latido(agente, *horas, limite_horas)
+        }
+    }
 }
 
 /// Ejecuta un paso y, si falla, anota el error con su descripción.

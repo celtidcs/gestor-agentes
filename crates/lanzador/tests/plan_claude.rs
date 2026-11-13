@@ -26,21 +26,21 @@ const FINAL_POWERSHELL: &str = "; $tmr.Dispose(); [Console]::Title = $t";
 #[test]
 fn windows_abre_powershell_con_el_guion_completo() {
     let mut p = peticion(Herramienta::Claude);
-    p.carpeta_proyecto = PathBuf::from(r"C:\proyectos\MMCelt");
+    p.carpeta_proyecto = PathBuf::from(r"C:\proyectos\Demo");
     p.directorio_configuracion = Some(PathBuf::from(r"C:\Users\usuario\.claude2"));
     p.ejecutable = Some(PathBuf::from(r"C:\herramientas\claude.exe"));
     let entorno = EntornoDeEnsayo::default().con_archivo(r"C:\herramientas\claude.exe");
     let plan = plan(&p, Sistema::Windows, &entorno);
 
     let esperado = format!(
-        "$t = 'Claude 2 · MMCelt'; {TEMPORIZADOR}\
+        "$t = 'Claude 2 · Demo'; {TEMPORIZADOR}\
          $env:GESTOR_AGENTE = 'Claude 2'; $env:CLAUDECODE = ''; \
          $env:CLAUDE_CONFIG_DIR = 'C:\\Users\\usuario\\.claude2'; \
-         Set-Location -LiteralPath 'C:\\proyectos\\MMCelt'; \
+         Set-Location -LiteralPath 'C:\\proyectos\\Demo'; \
          & 'C:\\herramientas\\claude.exe'{FINAL_POWERSHELL}"
     );
     assert_eq!(guion_powershell(&plan), esperado);
-    assert_eq!(plan.carpeta, PathBuf::from(r"C:\proyectos\MMCelt"));
+    assert_eq!(plan.carpeta, PathBuf::from(r"C:\proyectos\Demo"));
     assert_eq!(
         plan.carpetas_a_crear,
         vec![PathBuf::from(r"C:\Users\usuario\.claude2")]
@@ -78,11 +78,11 @@ fn linux_abre_gnome_terminal_si_esta_con_el_guion_completo() {
 
     let guion = "export GESTOR_AGENTE='Claude 2'; export CLAUDECODE=''; \
                  export CLAUDE_CONFIG_DIR='/home/usuario/.claude2'; \
-                 cd '/proyectos/MMCelt'; '/home/usuario/.local/bin/claude'; exec bash";
+                 cd '/proyectos/Demo'; '/home/usuario/.local/bin/claude'; exec bash";
     assert_eq!(plan.programa, PathBuf::from("gnome-terminal"));
     assert_eq!(
         textos(&plan.argumentos),
-        ["--title=Claude 2 · MMCelt", "--", "bash", "-c", guion]
+        ["--title=Claude 2 · Demo", "--", "bash", "-c", guion]
     );
 }
 
@@ -90,7 +90,7 @@ fn linux_abre_gnome_terminal_si_esta_con_el_guion_completo() {
 fn linux_elige_el_emulador_por_orden_de_preferencia() {
     let mut p = peticion(Herramienta::Claude);
     p.ejecutable = Some(PathBuf::from("claude"));
-    let titulo = "Claude 2 · MMCelt";
+    let titulo = "Claude 2 · Demo";
     let casos: [(&[&str], &str, Vec<&str>); 4] = [
         (
             &["konsole", "xfce4-terminal", "xterm"],
@@ -100,7 +100,7 @@ fn linux_elige_el_emulador_por_orden_de_preferencia() {
         (
             &["xfce4-terminal", "xterm"],
             "xfce4-terminal",
-            vec!["--title=Claude 2 · MMCelt", "-x"],
+            vec!["--title=Claude 2 · Demo", "-x"],
         ),
         (&["xterm"], "xterm", vec!["-T", titulo, "-e"]),
         // Sin ninguno instalado se recurre a xterm, como la 2.3.2.

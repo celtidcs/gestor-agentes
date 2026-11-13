@@ -31,4 +31,6 @@ El historial de cambios, changelog.md, recoge lo que cambia en cada versión.
 
 Los defectos conocidos, defectos-conocidos.md, recogen los fallos y límites que todavía no se han corregido.
 
+Gestor Agentes y la ingeniería de arneses, harness-engineering.md, explica qué ideas de la ingeniería de arneses para agentes aplica la aplicación y con qué funcionalidad, con sus fuentes.
+
 En la carpeta infrastructure están la visión general de los componentes, overview.md; los requisitos y versiones de las herramientas, requirements.md; los programas externos con los que trabaja la aplicación, services.md; y la guía para preparar un equipo nuevo, clone-guide.md. Están también los guiones: setup prepara el entorno, build-portable genera el paquete, prueba-portable comprueba el paquete, puertas-rust pasa las comprobaciones de calidad y prueba-setup comprueba esos mismos guiones. Cada uno tiene versión para Windows, terminada en .ps1, y para Linux, terminada en .sh.
