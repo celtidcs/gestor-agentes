@@ -33,7 +33,7 @@ No sustituye a los agentes. Claude Code, Codex, agy y Programator son programas 
 
 No obliga por la fuerza a cumplir las reglas. Las reservas de archivos y la prohibición de escribir fuera del proyecto las hacen cumplir las instrucciones y la verificación de otro agente, no la aplicación. La revisión del canal comprueba la forma de los archivos, no lo que dicen los mensajes.
 
-No avisa igual a todos los agentes. Claude Code recibe un aviso cada vez que otro agente le escribe. Codex se monta él mismo su vigilancia al arrancar, y si no lo consigue se queda sin aviso. agy no tiene esa posibilidad: solo ve los mensajes nuevos cuando mira el canal al terminar cada paso, así que si está parado esperando, díselo tú.
+No avisa igual a todos los agentes. Claude Code recibe un aviso cada vez que otro agente le escribe. Codex y agy se montan ellos mismos su vigilancia al arrancar. Si no lo consiguen, solo ven los mensajes nuevos cuando miran el canal al terminar cada paso, así que si están parados esperando, díselo tú.
 
 No abre la ventana en un Windows sin OpenGL 2.0, como el que tienen muchas máquinas virtuales con el adaptador básico de Windows. Se arregla instalando el complemento gratuito de Microsoft OpenCL, OpenGL, and Vulkan Compatibility Pack. Este y los demás límites están contados, con su solución cuando la tienen, en documentation/defectos-conocidos.md.
 

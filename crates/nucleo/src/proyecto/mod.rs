@@ -4,6 +4,7 @@
 //! en [`crate::instrucciones`]; aquí está la parte que toca el disco.
 
 pub mod archivos;
+pub mod avisos_de_preparacion;
 pub mod catalogo;
 pub mod estado;
 pub mod estructura;
@@ -11,6 +12,7 @@ pub mod informe;
 pub mod inicializador;
 pub mod localizador;
 pub mod momento;
+pub mod permisos;
 pub mod registro_de_huellas;
 pub mod revision_del_canal;
 pub mod sistema_anterior;

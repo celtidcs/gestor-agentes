@@ -33,14 +33,15 @@ Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consoli
 ## 3. Canal y coordinación
 
 - Toda la comunicación entre agentes y con el Director pasa por `.gestor/canal/`.
-- `estado.md` solo recoge hechos comprobables, con fecha, hora del sistema y quién los anota: papeles, rama, commit base, versión, reparto de funciones, autoexclusiones, reservas, mutaciones vivas y prohibiciones.
+- `estado.md` solo recoge hechos comprobables y vigentes, con fecha, hora del sistema y quién los anota: papeles, rama, commit base, versión, reparto de funciones, autoexclusiones, reservas, mutaciones vivas y prohibiciones.
 - Tu bandeja solo la escribes tú. No edites nunca el archivo de otro agente. Lo que un agente no ha escrito en su bandeja, no lo ha dicho.
 - Cada intervención empieza con `LATIDO: <fecha y hora>` tomadas del sistema (`date` o `Get-Date`), nunca a ojo.
 - Un encargo solo existe si dice `Para <agente>`.
+- Escribe en el canal solo con un resultado, una pregunta o un bloqueo: sin acuses ni avisos de arranque. Cita rutas, no copies contenido. Copia al Director solo si decide él. No repitas en la terminal lo del canal.
 - Mantén tu vigilante (paso 8 del arranque) mientras trabajes y atiende en cuanto llegue un mensaje para ti.
 - Poda tu bandeja a unas ochenta líneas vivas; lo resuelto va a tu histórico, en tu carpeta.
 - Reservas: antes de modificar un archivo del repositorio, anótalo en `## Reservas activas` de `estado.md` (`- Claude 2, 2026-11-13 10:30: ruta, carpeta/ — motivo`) y bórralo al terminar.
-- Diario: escribe el plan en tu `tarea-en-curso.md` antes de ejecutar y cada hito al alcanzarlo, para que otro pueda retomarlo en el punto exacto.
+- Diario: escribe el plan en tu `tarea-en-curso.md` antes de ejecutar y cada hito al alcanzarlo, para que otro pueda retomarlo en el punto exacto. Lo cerrado va a `historico-diario.md`.
 
 ## 4. Director, Jefe y ayudantes
 
@@ -49,7 +50,7 @@ Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consoli
 - Ninguna función (programar, verificar, depurar, investigar, documentar, entregar) es fija. El Jefe la propone en el canal, se acuerda y él la anota en `estado.md`. Quien delega verifica el resultado.
 - Las decisiones técnicas se acuerdan en el canal, con igual autoridad técnica. Si hay desacuerdo, decide el Director, previa consulta del Jefe.
 - Si el Jefe no está (latido desfasado), sigue con lo asignado y déjale escrito lo que necesites.
-- Toda orden del Director se traslada en el momento al canal: sus palabras literales y, aparte, tu interpretación. Las permanentes se añaden con su fecha a `.gestor/ordenes-del-director.md` (solo se añade texto). Lo decidido no se vuelve a preguntar.
+- Quien recibe una orden directa del Director la traslada en el momento al canal: palabras literales y, aparte, su interpretación. Las que llegan por el canal no se recopian. Las permanentes se añaden con su fecha a `.gestor/ordenes-del-director.md` (solo se añade texto). Lo decidido no se vuelve a preguntar.
 
 ## 5. Código
 

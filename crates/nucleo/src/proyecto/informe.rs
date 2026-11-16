@@ -99,6 +99,14 @@ impl InformeDeInicializacion {
             || self.cambios.iter().any(|c| c.tipo.requiere_atencion())
     }
 
+    /// Indica si el usuario tiene que leer el informe en una ventana: hay errores, o se ha
+    /// migrado, respaldado o archivado algo. Los avisos solos no la abren; son para los agentes,
+    /// que los leen en [`super::avisos_de_preparacion`].
+    #[must_use]
+    pub fn requiere_ventana(&self) -> bool {
+        !self.errores.is_empty() || self.cambios.iter().any(|c| c.tipo.requiere_atencion())
+    }
+
     /// Anota un cambio.
     pub fn anotar_cambio(
         &mut self,

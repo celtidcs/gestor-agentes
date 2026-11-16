@@ -100,7 +100,7 @@ Haz un clic sobre el proyecto para seleccionarlo y pulsa el botón del agente co
 
 Al pulsar el botón, la barra de estado dice que está preparando el proyecto para ese agente. Durante esa preparación, que dura muy poco, la aplicación revisa la carpeta y crea o pone al día las instrucciones de los agentes, el espacio donde se dejan mensajes y el repositorio git. Después abre una ventana de terminal titulada con el agente y el proyecto, por ejemplo Claude 1 · Mi proyecto, ya situada en la carpeta del proyecto y con el agente en marcha. La barra de estado lo confirma con un texto como Claude 1 abierto en Mi proyecto.
 
-Si durante la preparación ha pasado algo que conviene que sepas, antes de abrir el agente la aplicación te enseña una ventana titulada Preparación seguida del nombre del proyecto. Tiene hasta tres apartados: Errores, Avisos y Cambios. Léela con calma y pulsa Aceptar. El apartado Avisos y qué hacer con cada aviso se explican más abajo.
+Si durante la preparación algo ha fallado, o la aplicación ha tenido que guardar una copia de un archivo o llevar al archivo algo del sistema anterior, te enseña una ventana titulada Preparación seguida del nombre del proyecto. Tiene hasta tres apartados: Errores, Avisos y Cambios. Léela con calma y pulsa Aceptar. Los avisos que no van acompañados de nada de eso no abren ninguna ventana, porque los tienen que atender los agentes y no tú: la barra de estado dice cuántos hay, y la aplicación los deja en el archivo .gestor/avisos-de-preparacion.md del proyecto, que cada agente lee al arrancar. Ese archivo desaparece solo cuando ya no queda ningún aviso. Qué significa cada aviso se explica más abajo.
 
 El agente empieza a trabajar solo, sin que le escribas nada. La aplicación le manda al abrirlo un primer mensaje que le pide seguir su arranque, que son nueve pasos fijos y siempre los mismos. Primero averigua quién es, porque la aplicación le dice su identidad al abrirlo, y se presenta con una frase como esta: He leído AGENTS.md y las instrucciones del proyecto. Soy Claude 1. Canal Claude 1 disponible y listo. Después lee las instrucciones propias del proyecto, el estado del proyecto, los mensajes de todos los demás agentes y su propio diario, por si dejó algo a medias la vez anterior.
 
@@ -147,7 +147,7 @@ Si trabajas con Programator, el modelo local, los demás agentes saben encargarl
 
 Cómo se enteran los agentes de los mensajes
 
-Cada agente tiene un vigilante del canal, que le avisa cuando otro agente escribe. No funciona igual en todas las herramientas. Claude Code lo deja en marcha en segundo plano y recibe un aviso en cuanto hay un mensaje nuevo; si el mensaje va dirigido a él, el aviso lo marca como encargo. Codex se monta él mismo, al arrancar, su propio sistema de vigilancia, que lo avisa aunque esté esperando. agy no tiene forma de recibir avisos: mira el canal al terminar cada paso de su trabajo. Por eso, si un agente de agy está parado esperando y otro le escribe, no se entera hasta que tú le digas algo; basta con escribirle que mire el canal.
+Cada agente tiene un vigilante del canal, que le avisa cuando otro agente escribe. No funciona igual en todas las herramientas. Claude Code lo deja en marcha en segundo plano y recibe un aviso en cuanto hay un mensaje nuevo; si el mensaje va dirigido a él, el aviso lo marca como encargo. Codex y agy se montan ellos mismos, al arrancar, su propio sistema de vigilancia, que los avisa aunque estén esperando. Si su herramienta no les deja, miran el canal al terminar cada paso de su trabajo y lo dicen en su bandeja; en ese caso, si el agente está parado esperando y otro le escribe, no se entera hasta que tú le digas algo, y basta con escribirle que mire el canal.
 
 
 Cómo va el equipo de un proyecto
@@ -156,7 +156,7 @@ Al seleccionar un proyecto en la lista, encima de los botones aparece una línea
 
 Si el proyecto todavía no tiene estado del canal, porque no se ha abierto nunca con esta versión, la línea no aparece.
 
-Al abrir un proyecto, la ventana de preparación también puede avisarte de cosas del equipo que no cuadran: dos agentes que reservan el mismo archivo, la reserva de un agente que lleva más de doce horas sin dar señales, código cambiado a propósito sin restaurar o un estado del proyecto al que le falta algún apartado. El apartado Los avisos y qué hacer con ellos explica cada uno. Díselo al Jefe del proyecto, que es quien lo ordena.
+Al abrir un proyecto, la preparación también puede avisar de cosas del equipo que no cuadran: dos agentes que reservan el mismo archivo, la reserva de un agente que lleva más de doce horas sin dar señales, código cambiado a propósito sin restaurar o un estado del proyecto al que le falta algún apartado. El apartado Los avisos y qué hacer con ellos explica cada uno. Díselo al Jefe del proyecto, que es quien lo ordena.
 
 
 Quitar un proyecto de la lista
@@ -197,15 +197,24 @@ $env:CODEX_HOME = "$HOME\.codex2"; codex
 Gestor Agentes no inicia sesión ni guarda contraseñas. Solo reconoce las carpetas de cuenta que ya tienes y abre cada agente con la suya. Gemini y Programator no tienen cuentas separadas.
 
 
+Permisos de los agentes al arrancar
+
+Al arrancar, cada agente hace siempre lo mismo: mira quién es, la fecha y la hora, lista archivos, consulta el estado de git, escribe en la carpeta .gestor y pone en marcha su vigilante del canal. Para que no te pida permiso para eso en cada sesión, la aplicación deja esas acciones autorizadas, y solo esas, en el archivo de permisos del proyecto de cada herramienta que lo admite. No autoriza nada más: ni subir cambios, ni borrar, ni conectarse a internet.
+
+En Claude Code el archivo es .claude/settings.local.json, dentro del proyecto. Si ya lo tenías, la aplicación conserva todo lo que hubiera y solo añade las reglas que falten. Si el archivo está mal formado no lo toca y te lo dice en los avisos. Claude Code solo aplica este archivo sin preguntar mientras no esté guardado en git, así que no lo añadas al repositorio.
+
+En agy los permisos se guardan en tu configuración general, fuera del proyecto, y la aplicación no la toca. Puedes añadir tú las reglas una sola vez con la orden /permissions de agy. Son estas: command(date), command(ls) y command(git status); en Windows, para el vigilante, command(regex:powershell -NoProfile -ExecutionPolicy Bypass -File \.gestor/vigilante/vigilar-canal\.ps1( .+)?), y en Linux command(bash .gestor/vigilante/vigilar-canal.sh); y, para escribir en la carpeta de los agentes, write_file(.gestor/).
+
+
 Los avisos y qué hacer con ellos
 
-La ventana de preparación de un proyecto puede traer alguno de estos avisos. Ninguno impide trabajar.
+La preparación de un proyecto puede dejar alguno de estos avisos, en la ventana de preparación si se abre o, si no, en el archivo .gestor/avisos-de-preparacion.md, con un resumen en la barra de estado. Ninguno impide trabajar.
 
 Si habla de una copia exacta o de un archivo respaldado, es que AGENTS.md o CLAUDE.md tenían texto que no había escrito la aplicación. No se ha perdido nada: el original está en la carpeta .gestor\respaldos del proyecto. Lo que quieras que lean los agentes, escríbelo en instrucciones-del-proyecto.md.
 
 Si habla de archivos llevados al archivo, es que el proyecto tenía archivos del sistema de trabajo anterior, que ahora están en .gestor\archivo. El agente que revise las instrucciones mira si alguno guardaba una tarea a medias.
 
-Si dice que una bandeja mide más de lo debido, por ejemplo .gestor/canal/claude.md mide 62066 bytes, más de los 16384 de una bandeja podada, es que el buzón de ese agente ha crecido sin limpiarse. Díselo a ese agente para que pase lo ya resuelto a su histórico. El aviso sale con cualquier agente que abras, porque es del proyecto y no del agente, y deja de salir en cuanto la bandeja vuelve a su tamaño.
+Si dice que una bandeja mide más de lo debido, por ejemplo .gestor/canal/claude.md mide 62066 bytes, más de los 16384 de una bandeja podada, es que el buzón de ese agente ha crecido sin limpiarse. Díselo a ese agente para que pase lo ya resuelto a su histórico. El aviso sale con cualquier agente que abras, porque es del proyecto y no del agente, y deja de salir en cuanto la bandeja vuelve a su tamaño. Lo mismo pasa con el diario de un agente, su archivo tarea-en-curso.md, y con el estado del proyecto, .gestor/canal/estado.md: los agentes los leen enteros cada vez que arrancan, así que, si pasan de ese tamaño, lo ya cerrado tiene que ir a su histórico o al archivo.
 
 Si dice que las marcas estaban dañadas, un archivo de instrucciones antiguo estaba mal formado. La aplicación ha guardado una copia y ha pasado su texto entero al bloque pendiente de revisar, para que el agente quite lo que sobre.
 

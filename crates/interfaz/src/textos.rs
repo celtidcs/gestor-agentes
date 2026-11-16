@@ -246,6 +246,16 @@ pub fn con_aviso(estado: &str, aviso: &str) -> String {
     format!("{estado}. {aviso}")
 }
 
+/// Aviso de la barra de estado cuando la preparación deja avisos para los agentes, que no abren
+/// ventana: cuántos son y dónde los leen.
+#[must_use]
+pub fn avisos_para_los_agentes(avisos: usize) -> String {
+    format!(
+        "{avisos} aviso(s) para los agentes en {}",
+        nucleo::proyecto::avisos_de_preparacion::RUTA_RELATIVA
+    )
+}
+
 /// Número con punto de millares, como se escribe en español: 40.434.
 fn con_puntos(numero: u64) -> String {
     let cifras = numero.to_string();

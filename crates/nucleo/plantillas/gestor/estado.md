@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Solo hechos comprobables. Cada línea lleva la fecha, la hora del sistema y la identidad de quien la anota. Lo escribe quien cambia el hecho.
+Solo hechos comprobables. Cada línea lleva la fecha, la hora del sistema y la identidad de quien la anota. Lo escribe quien cambia el hecho. Solo lo vigente: lo superado pasa a `.gestor/archivo/`.
 
 ## Papeles
 

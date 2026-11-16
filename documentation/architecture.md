@@ -78,6 +78,10 @@ Aviso de versión. La decisión es pura y vive en el núcleo, en actualizaciones
 
 Revisión del canal. proyecto/revision_del_canal.rs es lógica pura: recibe el texto de estado.md, el de las bandejas y la hora, y devuelve avisos y el resumen del equipo. Solo comprueba la forma, porque esos archivos los escriben modelos de lenguaje y un análisis más fino sería frágil. El inicializador pone sus avisos en el informe, como el de las bandejas sin podar, y la interfaz usa el resumen para la línea del equipo, leída al seleccionar un proyecto y al terminar un trabajo, no en cada fotograma.
 
+Permisos del arranque. proyecto/permisos.rs es lógica pura: recibe el texto del archivo de permisos de Claude Code, si existe, y las reglas del arranque, y devuelve el texto nuevo, que no hace falta tocarlo o que el archivo no se entiende. Conserva el resto del archivo y el orden de sus claves. El inicializador lo lee y lo escribe.
+
+Avisos para los agentes. proyecto/avisos_de_preparacion.rs compone el archivo .gestor/avisos-de-preparacion.md con los avisos de la preparación, o lo borra si no hay ninguno. La interfaz solo abre el diálogo del informe cuando InformeDeInicializacion::requiere_ventana es verdadero, es decir, con errores, respaldos, archivados o migraciones; los avisos solos van a la barra de estado.
+
 Lo antiguo se aparta y se borra al consolidar. La experiencia de los primeros proyectos migrados enseñó que los archivos del sistema anterior que se dejaban a la vista acababan confundiendo a los agentes. La aplicación los aparta, incluidas las reglas que agy carga desde .agents, y las instrucciones prohíben seguirlos; el agente que consolida los borra cuando ha rescatado lo que siga vivo. La aplicación no borra nunca, para que nada se pierda por un error suyo.
 
 Normas del espacio de trabajo copiadas. El localizador busca el CLAUDE.md, AGENTS.md o GEMINI.md más cercano por encima del proyecto que no sea un archivo gestionado, y su texto va al final de AGENTS.md. Se copia porque Codex y Gemini no leen nada por encima de la raíz del repositorio.

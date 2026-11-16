@@ -26,7 +26,7 @@ Si el programa codex que se encuentra es codex.cmd, el que instala npm, PowerShe
 
 agy no recibe aviso de los mensajes nuevos
 
-Claude Code puede dejar el vigilante del canal en segundo plano y le llega un aviso cada vez que otro agente escribe. Codex se monta él mismo, al arrancar, su propio sistema de vigilancia del canal, que lo avisa aunque esté esperando. agy no tiene ninguna de las dos posibilidades: solo ve los mensajes nuevos cuando ejecuta el vigilante en su modo de una pasada, que sus instrucciones le piden al terminar cada paso. Si está parado esperando, no se entera hasta que le escribes. Dile que mire el canal. Si Codex no consigue montar el suyo, le pasa lo mismo.
+Claude Code puede dejar el vigilante del canal en segundo plano y le llega un aviso cada vez que otro agente escribe. Codex y agy se montan ellos mismos, al arrancar, su propio sistema de vigilancia del canal, que los avisa aunque estén esperando. Si su herramienta no se lo permite, solo ven los mensajes nuevos cuando ejecutan el vigilante en su modo de una pasada, al terminar cada paso, y lo dicen en su bandeja. Entonces, si están parados esperando, no se enteran hasta que les escribes. Diles que miren el canal.
 
 
 En Windows, Claude Code toma la bandeja claude.md por un archivo de instrucciones

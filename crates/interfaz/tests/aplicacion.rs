@@ -436,11 +436,11 @@ fn al_abrir_se_anota_la_fecha_y_se_cuenta_lo_cambiado() {
 }
 
 #[test]
-fn un_informe_que_requiere_atencion_se_muestra() {
+fn un_informe_con_errores_se_muestra() {
     let (mut aplicacion, _) = montar(vec![proyecto("uno", "/p/uno")]);
     let _ = abrir_claude(&mut aplicacion);
     let mut informe = InformeDeInicializacion::new();
-    informe.anotar_aviso("CLAUDE.md editado a mano");
+    informe.anotar_error("CLAUDE.md: acceso denegado");
     let esperado = informe.componer_texto();
     aplicacion.terminar(resultado_abierto(informe, Lanzamiento::Abierto));
     assert_eq!(
@@ -450,6 +450,54 @@ fn un_informe_que_requiere_atencion_se_muestra() {
             texto: esperado,
         })
     );
+}
+
+#[test]
+fn un_informe_con_errores_y_avisos_se_muestra_entero() {
+    let (mut aplicacion, _) = montar(vec![proyecto("uno", "/p/uno")]);
+    let _ = abrir_claude(&mut aplicacion);
+    let mut informe = InformeDeInicializacion::new();
+    informe.anotar_aviso(".gestor/canal/claude.md mide 30000 bytes");
+    informe.anotar_error("CLAUDE.md: acceso denegado");
+    let esperado = informe.componer_texto();
+    aplicacion.terminar(resultado_abierto(informe, Lanzamiento::Abierto));
+    assert_eq!(
+        aplicacion.dialogo(),
+        Some(&Dialogo::Informacion {
+            titulo: String::from("Preparación de uno"),
+            texto: esperado,
+        })
+    );
+}
+
+#[test]
+fn un_informe_solo_con_avisos_no_abre_ventana_y_lo_dice_la_barra() {
+    let (mut aplicacion, _) = montar(vec![proyecto("uno", "/p/uno")]);
+    let _ = abrir_claude(&mut aplicacion);
+    let mut informe = InformeDeInicializacion::new();
+    informe.anotar_aviso(".gestor/canal/claude.md mide 30000 bytes");
+    informe.anotar_aviso("Falta el apartado Papeles");
+    aplicacion.terminar(resultado_abierto(informe, Lanzamiento::Abierto));
+    assert_eq!(aplicacion.dialogo(), None);
+    assert!(
+        aplicacion
+            .texto_de_estado()
+            .ends_with(". 2 aviso(s) para los agentes en .gestor/avisos-de-preparacion.md"),
+        "{}",
+        aplicacion.texto_de_estado()
+    );
+}
+
+#[test]
+fn un_informe_sin_avisos_no_toca_la_barra() {
+    let (mut aplicacion, _) = montar(vec![proyecto("uno", "/p/uno")]);
+    let _ = abrir_claude(&mut aplicacion);
+    aplicacion.terminar(resultado_abierto(
+        InformeDeInicializacion::new(),
+        Lanzamiento::Abierto,
+    ));
+    assert_eq!(aplicacion.dialogo(), None);
+    assert!(!aplicacion.texto_de_estado().contains("aviso(s)"));
 }
 
 #[test]

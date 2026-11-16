@@ -103,6 +103,20 @@ pub const APARTADO_CAMBIOS: &str = "Cambios";
 /// Informe sin nada que contar.
 pub const INFORME_SIN_CAMBIOS: &str = "No ha hecho falta cambiar nada.";
 
+/// Cabecera del archivo de avisos de la última preparación, hecha en `momento`.
+#[must_use]
+pub fn cabecera_de_avisos(momento: &str) -> String {
+    format!(
+        "# Avisos de la preparación del proyecto
+
+Gestor Agentes reescribe este archivo cada vez que prepara el proyecto y lo borra cuando no queda ningún aviso: no lo edites. Última preparación: {momento}.
+
+Atiende los avisos que te tocan; por ejemplo, si tu bandeja está sin podar, pasa lo resuelto a tu histórico.
+
+"
+    )
+}
+
 /// Línea del informe para un cambio en `archivo`, con su descripción y su detalle, si lo hay.
 #[must_use]
 pub fn linea_de_cambio(archivo: &str, descripcion: &str, detalle: Option<&str>) -> String {
@@ -145,6 +159,16 @@ pub fn git_no_comprobado(motivo: &str) -> String {
 
 /// Detalle del cambio en .gitignore.
 pub const DETALLE_GITIGNORE: &str = "se excluye .gestor/ del control de versiones";
+/// Detalle del cambio en el archivo de permisos de una herramienta.
+pub const DETALLE_PERMISOS: &str = "se autoriza por defecto lo que pide el arranque de los agentes";
+
+/// Aviso de un archivo de permisos que no se entiende y por eso no se toca.
+#[must_use]
+pub fn permisos_ilegibles(archivo: &str, motivo: &str) -> String {
+    format!(
+        "{archivo} no se ha podido leer ({motivo}); no se toca, y los agentes preguntarán los permisos del arranque hasta que se corrija."
+    )
+}
 
 // Informe de preparación: proyecto e instrucciones.
 
@@ -202,6 +226,14 @@ pub const DETALLE_PUESTO_AL_DIA: &str = "puesto al día con el texto vigente";
 pub fn bandeja_sin_podar(bandeja: &str, tamano: u64, limite: u64) -> String {
     format!(
         "{bandeja} mide {tamano} bytes, más de los {limite} de una bandeja podada; su dueño debe pasar lo resuelto a su histórico."
+    )
+}
+
+/// Aviso de un archivo que se lee entero en cada arranque y ha crecido demasiado.
+#[must_use]
+pub fn archivo_de_arranque_grande(archivo: &str, tamano: u64, limite: u64) -> String {
+    format!(
+        "{archivo} mide {tamano} bytes, más de los {limite} que conviene leer en cada arranque; lo cerrado debe pasar a su histórico o a .gestor/archivo/."
     )
 }
 

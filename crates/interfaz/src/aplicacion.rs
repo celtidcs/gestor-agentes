@@ -466,11 +466,15 @@ impl Aplicacion {
                     }
                     Lanzamiento::Fallido(_) => textos::preparado_sin_abrir(&nombre, &identidad),
                 };
-                self.estado = match perfiles::aviso_de_tamano(&perfil, tamano_instrucciones) {
+                let estado = match perfiles::aviso_de_tamano(&perfil, tamano_instrucciones) {
                     Some(aviso) => textos::con_aviso(&estado, &aviso),
                     None => estado,
                 };
-                if informe.requiere_atencion() {
+                self.estado = match informe.avisos().len() {
+                    0 => estado,
+                    avisos => textos::con_aviso(&estado, &textos::avisos_para_los_agentes(avisos)),
+                };
+                if informe.requiere_ventana() {
                     self.informar(
                         &textos::titulo_preparacion(&nombre),
                         informe.componer_texto(),

@@ -455,7 +455,9 @@ fn una_bandeja_sin_podar_se_avisa_y_estado_md_no_cuenta() {
         .iter()
         // Solo los avisos de tamaño: desde la 3.2.0, un estado.md sin sus apartados da además los
         // de la revisión del canal, que vigila tests/revision_del_canal.rs.
-        .filter(|a| a.starts_with(".gestor/canal/") && a.contains(" mide "))
+        // Desde la 3.4.0, estado.md grande da además su propio aviso de archivo de arranque, que
+        // vigila tests/economia.rs; aquí solo cuentan los de bandeja.
+        .filter(|a| a.starts_with(".gestor/canal/") && a.contains(" de una bandeja podada"))
         .collect();
     assert_eq!(avisos.len(), 1, "{avisos:?}");
     assert!(avisos[0].starts_with(".gestor/canal/codex.md mide"));

@@ -71,7 +71,7 @@ El agente busca su papel en el estado del proyecto, en el apartado Papeles, y so
 
 Un agente no se entera de los mensajes de los demás
 
-Depende de la herramienta. Claude Code deja un vigilante en segundo plano que lo avisa en cuanto otro escribe; si ha dejado de avisar, es que se le ha caducado y no lo ha vuelto a armar: pídele que lo arme otra vez. Codex se monta él mismo su sistema de vigilancia al arrancar; si no lo ha conseguido, mira el canal al terminar cada paso, como agy. agy no puede recibir avisos y solo ve los mensajes nuevos cuando termina un paso de su trabajo, así que si está parado esperando no se enterará hasta que le escribas: basta con decirle que mire el canal. Recuerda también que un mensaje solo es un encargo si empieza diciendo a quién va, por ejemplo Para Codex 1.
+Depende de la herramienta. Claude Code deja un vigilante en segundo plano que lo avisa en cuanto otro escribe; si ha dejado de avisar, es que se le ha caducado y no lo ha vuelto a armar: pídele que lo arme otra vez. Codex y agy se montan ellos mismos su sistema de vigilancia al arrancar. Si no lo han conseguido, miran el canal al terminar cada paso y lo dicen en su bandeja; entonces, si están parados esperando, no se enterarán hasta que les escribas: basta con decirles que miren el canal. Recuerda también que un mensaje solo es un encargo si empieza diciendo a quién va, por ejemplo Para Codex 1.
 
 
 No aparece la línea del equipo al seleccionar un proyecto
@@ -79,9 +79,9 @@ No aparece la línea del equipo al seleccionar un proyecto
 La línea sale encima de los botones cuando el proyecto tiene estado del canal, es decir, cuando se ha abierto al menos una vez con esta versión y ya existe su archivo .gestor\canal\estado.md. Abre el proyecto con cualquier agente y vuelve a seleccionarlo. Si la línea dice Jefe sin asignar, ningún agente ha anotado todavía quién es el Jefe: el primero que arranque te lo preguntará.
 
 
-La ventana de preparación avisa de reservas, mutaciones vivas o apartados que faltan
+La barra de estado o la ventana de preparación avisan de reservas, mutaciones vivas o apartados que faltan
 
-Son avisos sobre el equipo de agentes del proyecto, no fallos de la aplicación. El Manual de uso explica cada uno en su apartado Los avisos y qué hacer con ellos. En resumen: lo que falte en el estado del proyecto lo añade el primer agente que arranque; las mutaciones vivas las tiene que restaurar el agente que las aplicó; y las reservas repetidas o de agentes que ya no están las ordena el Jefe del proyecto. Mientras no se arreglen, el aviso sale cada vez que abres el proyecto.
+Son avisos sobre el equipo de agentes del proyecto, no fallos de la aplicación. El Manual de uso explica cada uno en su apartado Los avisos y qué hacer con ellos. En resumen: lo que falte en el estado del proyecto lo añade el primer agente que arranque; las mutaciones vivas las tiene que restaurar el agente que las aplicó; y las reservas repetidas o de agentes que ya no están las ordena el Jefe del proyecto. Mientras no se arreglen, el aviso sale cada vez que abres el proyecto. Si no ha habido ningún error, no abre ventana: la barra de estado dice cuántos avisos hay y los agentes los leen en .gestor/avisos-de-preparacion.md.
 
 
 Sale una ventana titulada Actualización disponible

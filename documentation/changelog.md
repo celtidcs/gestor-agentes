@@ -3,6 +3,19 @@ Historial de cambios
 Este historial recoge lo que cambia en cada versión, contado para quien usa la aplicación. Las versiones siguen la numeración de Semantic Versioning: mayor, menor y corrección.
 
 
+3.4.0, del 16 de noviembre de 2026. Menos interrupciones y menos gasto
+
+Sin preguntas de permiso al arrancar en Claude Code. La aplicación deja autorizado en el archivo .claude/settings.local.json del proyecto lo que todo agente hace al arrancar, y nada más: saber quién es, mirar la fecha, listar archivos, ver el estado de git, escribir en la carpeta .gestor y poner en marcha su vigilante. Conserva lo que ya tuvieras en ese archivo. Para agy, cuyos permisos se guardan fuera del proyecto, el manual explica qué reglas añadir una sola vez.
+
+Los avisos ya no interrumpen. Los avisos de la preparación que debe atender un agente, como una bandeja sin podar, ya no abren una ventana en cada lanzamiento: la barra de estado dice cuántos hay y quedan en .gestor/avisos-de-preparacion.md, que cada agente lee al arrancar. La ventana sigue saliendo si algo falla o si la aplicación ha guardado copia de algún archivo.
+
+agy también vigila el canal. Sus instrucciones le piden ahora que monte una vigilancia continua que lo avise aunque esté esperando, como ya hacía Codex. Solo si su herramienta no puede, mira el canal al terminar cada paso y lo dice.
+
+Mensajes más baratos. Los agentes escriben en el canal solo cuando tienen un resultado, una pregunta o un bloqueo, sin acuses de recibo; citan dónde está cada cosa en vez de copiarla; no repiten en la terminal lo que ya está en el canal; y tus órdenes las copia solo quien las recibe de ti.
+
+Arranques más ligeros. El diario de cada agente guarda solo la tarea en curso y el estado del proyecto solo lo vigente; lo cerrado pasa a su histórico. La aplicación avisa, como ya hacía con las bandejas, cuando un diario o el estado crecen demasiado.
+
+
 3.3.2, del 13 de noviembre de 2026. Pruebas con un proyecto de ejemplo neutro
 
 Sin cambios en la aplicación. Las pruebas del lanzador usan ahora como ejemplo un proyecto ficticio llamado Demo.

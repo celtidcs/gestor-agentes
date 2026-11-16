@@ -13,9 +13,14 @@
 //!    lo archivado en el paso 3. Si ya existe no se toca nunca.
 //! 6. Archivos que la aplicación escribe enteros: AGENTS.md, CLAUDE.md y los documentos de
 //!    consulta, con copia previa de lo que no hubiera escrito ella.
-//! 7. Aviso de las bandejas del canal que han crecido demasiado y de lo que no cuadra en el estado
+//! 7. Permisos del arranque en el archivo de permisos del proyecto de cada herramienta
+//!    ([`permisos`]), sin quitar nada de lo que ya tenga.
+//! 8. Aviso de las bandejas del canal que han crecido demasiado y de lo que no cuadra en el estado
 //!    del canal (apartados, mutaciones vivas y reservas), con [`revision_del_canal`].
-//! 8. Registro de huellas de lo escrito.
+//!    Además, aviso de los diarios y del estado del canal que pasan del mismo límite.
+//! 9. Registro de huellas de lo escrito.
+//! 10. Avisos de esta preparación en .gestor/avisos-de-preparacion.md, para los agentes, o borrado
+//!     de ese archivo si no queda ninguno ([`avisos_de_preparacion`]).
 //!
 //! Un paso que falla se anota en el informe y no impide los siguientes. Nada se sustituye en
 //! silencio: todo cambio queda en el informe y todo texto desplazado, en un respaldo o en el
@@ -26,15 +31,17 @@ use std::io;
 use std::path::Path;
 
 use super::archivos;
+use super::avisos_de_preparacion;
 use super::catalogo::{self, ArchivoGestionado};
 use super::estructura;
 use super::informe::{InformeDeInicializacion, TipoDeCambio};
 use super::localizador::FuenteDeEntorno;
 use super::momento::{Momento, Reloj};
+use super::permisos::{self, Fusion};
 use super::registro_de_huellas::{self, RegistroDeHuellas};
 use super::revision_del_canal;
 use super::sistema_anterior;
-use crate::agentes::{IdentidadAgente, TipoAgente, CARPETA_CANAL};
+use crate::agentes::{IdentidadAgente, TipoAgente, CARPETA_CANAL, CARPETA_GESTOR};
 use crate::git::{self, ServicioGit};
 use crate::instrucciones::formato::FormatoDeTexto;
 use crate::instrucciones::huella;
@@ -181,8 +188,20 @@ impl<'a> InicializadorDeProyecto<'a> {
             });
         }
 
+        paso(&mut informe, permisos::ARCHIVO_DE_CLAUDE, |informe| {
+            mantener_permisos(
+                raiz,
+                permisos::ARCHIVO_DE_CLAUDE,
+                &permisos::REGLAS_DE_CLAUDE,
+                informe,
+            )
+        });
+
         paso(&mut informe, CARPETA_CANAL, |informe| {
             avisar_bandejas_grandes(raiz, self.configuracion.limite_de_bandeja(), informe)
+        });
+        paso(&mut informe, CARPETA_GESTOR, |informe| {
+            avisar_diarios_y_estado_grandes(raiz, self.configuracion.limite_de_bandeja(), informe)
         });
         let limite_de_latido = self.configuracion.limite_de_latido_horas();
         paso(&mut informe, ARCHIVO_DE_ESTADO_DEL_CANAL, |informe| {
@@ -190,6 +209,10 @@ impl<'a> InicializadorDeProyecto<'a> {
         });
         paso(&mut informe, registro_de_huellas::RUTA_RELATIVA, |_| {
             registro.guardar(raiz)
+        });
+        let avisos = informe.avisos().to_vec();
+        paso(&mut informe, avisos_de_preparacion::RUTA_RELATIVA, |_| {
+            avisos_de_preparacion::guardar(raiz, &avisos, momento)
         });
 
         informe
@@ -371,6 +394,89 @@ fn avisar_bandejas_grandes(
             tamano,
             limite,
         ));
+    }
+    Ok(())
+}
+
+/// Añade al archivo de permisos de una herramienta las reglas del arranque que le falten
+/// ([`permisos::fusionar`]). Un archivo que no se entiende no se toca: se avisa.
+fn mantener_permisos(
+    raiz: &Path,
+    ruta_relativa: &str,
+    reglas: &[&str],
+    informe: &mut InformeDeInicializacion,
+) -> io::Result<()> {
+    let ruta = archivos::ruta(raiz, ruta_relativa);
+    let leido = archivos::leer(&ruta)?;
+    match permisos::fusionar(leido.as_ref().map(|(texto, _)| texto.as_str()), reglas) {
+        Fusion::SinCambios => {}
+        Fusion::Ilegible(motivo) => {
+            informe.anotar_aviso(textos::permisos_ilegibles(ruta_relativa, &motivo));
+        }
+        Fusion::Escribir(texto) => {
+            let formato = leido.as_ref().map(|(_, f)| *f).unwrap_or_default();
+            archivos::escribir(&ruta, &texto, formato)?;
+            let tipo = if leido.is_some() {
+                TipoDeCambio::Actualizado
+            } else {
+                TipoDeCambio::Creado
+            };
+            informe.anotar_cambio(
+                ruta_relativa,
+                tipo,
+                Some(String::from(textos::DETALLE_PERMISOS)),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Nombre del diario de cada agente dentro de su carpeta de .gestor/.
+pub const NOMBRE_DEL_DIARIO: &str = "tarea-en-curso.md";
+
+/// De los archivos que se leen enteros en cada arranque (los diarios y el estado del canal), con su
+/// ruta relativa y su tamaño, los que pasan del límite, ordenados por ruta.
+#[must_use]
+pub fn archivos_de_arranque_grandes(entradas: &[(String, u64)], limite: u64) -> Vec<(String, u64)> {
+    let mut grandes: Vec<(String, u64)> = entradas
+        .iter()
+        .filter(|(_, tamano)| *tamano > limite)
+        .cloned()
+        .collect();
+    grandes.sort();
+    grandes
+}
+
+/// Avisa de cada diario de agente (.gestor/<agente>/tarea-en-curso.md) y del estado del canal que
+/// pasan del límite: se leen enteros en cada arranque, así que lo cerrado debe ir a su histórico.
+fn avisar_diarios_y_estado_grandes(
+    raiz: &Path,
+    limite: u64,
+    informe: &mut InformeDeInicializacion,
+) -> io::Result<()> {
+    let mut leidas: Vec<(String, u64)> = Vec::new();
+    let estado = archivos::ruta(raiz, ARCHIVO_DE_ESTADO_DEL_CANAL);
+    if let Ok(datos) = fs::metadata(&estado) {
+        leidas.push((ARCHIVO_DE_ESTADO_DEL_CANAL.to_owned(), datos.len()));
+    }
+    let entradas = match fs::read_dir(archivos::ruta(raiz, CARPETA_GESTOR)) {
+        Ok(entradas) => entradas,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    for entrada in entradas {
+        let entrada = entrada?;
+        let diario = entrada.path().join(NOMBRE_DEL_DIARIO);
+        if let Ok(datos) = fs::metadata(&diario) {
+            let carpeta = entrada.file_name().to_string_lossy().into_owned();
+            leidas.push((
+                format!("{CARPETA_GESTOR}/{carpeta}/{NOMBRE_DEL_DIARIO}"),
+                datos.len(),
+            ));
+        }
+    }
+    for (ruta, tamano) in archivos_de_arranque_grandes(&leidas, limite) {
+        informe.anotar_aviso(textos::archivo_de_arranque_grande(&ruta, tamano, limite));
     }
     Ok(())
 }

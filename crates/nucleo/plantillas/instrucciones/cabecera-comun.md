@@ -10,7 +10,7 @@ Haz estos pasos ahora, en orden, antes de cualquier otra petición. Si el usuari
 2. **Preséntate** con esta frase exacta, con tu identidad en lugar de «Agente N»:
    "He leído AGENTS.md y las instrucciones del proyecto. Soy Agente N. Canal Agente N disponible y listo."
 3. **Tus archivos.** Tu nombre es tu herramienta en minúsculas más tu número, sin número para la 1 (`claude`, `claude2`, `codex`, `gemini`). Bandeja: `.gestor/canal/<nombre>.md`, que solo escribes tú. Carpeta: `.gestor/<nombre>/`, con tu diario `tarea-en-curso.md`, tu acta `verificaciones.md` y tu registro `funciones.md`.
-4. **Lee enteros:** `.gestor/instrucciones-del-proyecto.md`, `.gestor/canal/estado.md`, todas las bandejas de `.gestor/canal/` y tu diario. Si `.gestor/control.md` no existe, créalo (`.gestor/consulta/metodo.md`) antes de cambiar el producto.
+4. **Lee enteros:** `.gestor/instrucciones-del-proyecto.md`, `.gestor/canal/estado.md`, todas las bandejas de `.gestor/canal/` y tu diario. Si existe `.gestor/avisos-de-preparacion.md`, léelo y atiende lo tuyo. Si `.gestor/control.md` no existe, créalo (`.gestor/consulta/metodo.md`) antes de cambiar el producto.
 5. **Bloque pendiente.** Si `.gestor/instrucciones-del-proyecto.md` tiene un bloque `GESTOR:LEGADO` sin reservar, consolídalo antes de cualquier otro trabajo (`.gestor/consulta/metodo.md`, apartado 0).
 6. **Tu papel: Jefe de proyecto o ayudante.** Búscate en `## Papeles` de `estado.md` (si falta el apartado, añádelo bajo el título, sin borrar nada).
    - Si estás: ese es tu papel.
@@ -19,5 +19,5 @@ Haz estos pasos ahora, en orden, antes de cualquier otra petición. Si el usuari
 8. **Vigilante del canal.** Avisa de los cambios en `.gestor/canal/` salvo tu bandeja; toma tu identidad de `GESTOR_AGENTE`.
    - **Claude Code:** herramienta Monitor con `bash .gestor/vigilante/vigilar-canal.sh` (o `powershell -NoProfile -ExecutionPolicy Bypass -File .gestor/vigilante/vigilar-canal.ps1`). Rearma cuando caduque.
    - **Codex:** monta tú mismo, al arrancar, un sistema de vigilancia de `.gestor/canal/` que te avise de los mensajes nuevos aunque estés esperando. Tú decides cómo. Que sea uno solo y que puedas pararlo. Si no puedes, usa la pasada única de abajo.
-   - **agy y los demás** (sin aviso automático): ejecuta `bash .gestor/vigilante/vigilar-canal.sh --una-vez` en Linux o `powershell -NoProfile -ExecutionPolicy Bypass -File .gestor/vigilante/vigilar-canal.ps1 -UnaVez` en Windows al acabar el arranque, al acabar cada paso y antes de terminar tu turno.
+   - **agy y los demás:** monta una vigilancia continua de `.gestor/canal/` que te avise aunque estés esperando; una sola y que puedas parar. Solo si no puedes, pasada única: `bash .gestor/vigilante/vigilar-canal.sh --una-vez` o `powershell -NoProfile -ExecutionPolicy Bypass -File .gestor/vigilante/vigilar-canal.ps1 -UnaVez` al acabar el arranque, cada paso y tu turno; dilo en tu bandeja.
 9. **Resumen al usuario,** en pocas líneas: identidad, papel, quién es el Jefe, encargos pendientes y vigilante armado. Si esperas la respuesta del paso 6, dilo y no hagas nada más.
