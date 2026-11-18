@@ -96,14 +96,41 @@ fn el_arranque_manda_leer_los_avisos() {
 }
 
 #[test]
-fn el_vigilante_de_agy_es_continuo_y_la_pasada_unica_es_el_ultimo_recurso() {
+fn claude_code_y_agy_esperan_al_cambio_y_la_pasada_unica_es_el_ultimo_recurso() {
+    // Desde la 3.5.0, agy lanza el modo --hasta-cambio, que termina con el primer encargo y lo
+    // despierta: así no gasta un turno cada vez que mira el canal sin novedades. Desde la 3.5.1,
+    // Claude Code hace lo mismo, en lugar del Monitor continuo que dejaba procesos huérfanos
+    // (orden del Director del 2026-11-18).
     let cabecera = plantillas::cabecera();
     let linea = cabecera
         .lines()
-        .find(|l| l.contains("**agy y los demás:**"))
-        .expect("línea de agy");
-    assert!(linea.contains("monta una vigilancia continua de `.gestor/canal/`"));
-    assert!(linea.contains("aunque estés esperando; una sola y que puedas parar."));
-    assert!(linea.contains("Solo si no puedes, pasada única"));
+        .find(|l| l.contains("**Claude Code, agy y los demás:**"))
+        .expect("línea de Claude Code y agy");
+    assert!(linea.contains("lanza en segundo plano, tal cual, "));
+    // «Uno solo» se entendió como «una sola vez»: el guion ya impide dos a la vez.
+    assert!(!linea.contains("uno solo"));
+    assert!(linea.contains("`bash .gestor/vigilante/vigilar-canal.sh --hasta-cambio`"));
+    assert!(linea.contains(
+        "`powershell -NoProfile -ExecutionPolicy Bypass -File .gestor/vigilante/vigilar-canal.ps1 -HastaCambio`"
+    ));
+    assert!(linea.contains("en Claude Code, con `run_in_background`, nunca con Monitor."));
+    assert!(linea.contains(
+        "Termina con un encargo para ti y te despierta: atiéndelo y vuelve a lanzarlo, cada vez que termine."
+    ));
+    assert!(linea.contains("Si no te despierta, pasada única"));
     assert!(linea.contains("dilo en tu bandeja"));
+    // Sin código en la línea de órdenes: la envoltura de agy expande las variables de PowerShell.
+    assert!(!linea.contains('$'), "{linea}");
+}
+
+#[test]
+fn ningun_vigilante_se_rearma_sin_fin_y_el_de_codex_termina_con_su_sesion() {
+    // El «Rearma cuando caduque» del Monitor acumulaba vigilantes vivos (incidente del
+    // 2026-11-18): ya no se pide a nadie.
+    let cabecera = plantillas::cabecera();
+    assert!(!cabecera.contains("Rearma cuando caduque"));
+    assert!(!cabecera.contains("herramienta Monitor con"));
+    assert!(cabecera.contains(
+        "   - **Codex:** monta tú mismo, al arrancar, un sistema de vigilancia de `.gestor/canal/` que te avise de los mensajes nuevos aunque estés esperando. Tú decides cómo. Que vigile toda la sesión, nunca dos a la vez, que solo te despierte con un encargo para ti y que termine al cerrarse tu sesión. Si no puedes, usa la pasada única de abajo.\n"
+    ));
 }

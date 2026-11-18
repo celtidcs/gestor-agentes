@@ -3,6 +3,25 @@ Historial de cambios
 Este historial recoge lo que cambia en cada versión, contado para quien usa la aplicación. Las versiones siguen la numeración de Semantic Versioning: mayor, menor y corrección.
 
 
+3.5.1, del 18 de noviembre de 2026. Vigilantes que no se quedan colgados
+
+Corrige un fallo que podía dejar cientos de vigilantes del canal en marcha. Se vio porque una ventana de consola se abría y se cerraba sin parar en Windows. Al contar los procesos aparecieron más de seiscientos vigilantes vivos, de varias sesiones de días anteriores, y se seguían creando cada pocos segundos. La causa era doble. Claude Code vigilaba con su herramienta Monitor, que caduca a los pocos minutos; al caducar dejaba de escuchar, pero en Windows el guion seguía vivo y en bucle, y las instrucciones pedían a Claude rearmarlo, así que cada rearme sumaba un vigilante más. Además, el guion de bash lanzaba varios programas por cada archivo del canal en cada comprobación, y en Windows cada uno abría su propia consola, que era la ventana que parpadeaba. También se vio que una sesión de agente que se daba por cerrada pero seguía abierta continuaba rearmando su vigilante.
+
+Cada agente vigila el canal por su cuenta, con su identidad, tengas uno o varios y sea cual sea su herramienta, y ninguno da por hecho que existan los demás. Todos siguen ahora la misma regla: el vigilante solo despierta al agente cuando hay un encargo para él, así no gasta un turno con cada cambio del canal que no le toca, nunca hay dos del mismo agente a la vez y ninguno sigue en marcha cuando se cierra su sesión. Claude Code y agy lo consiguen con el mismo guion, que dejan en segundo plano y termina con el primer encargo; al terminar, la herramienta despierta al agente, que lo atiende y vuelve a lanzarlo. Claude Code ya no usa el modo continuo con su herramienta Monitor, que era el origen del fallo. Codex no se despierta al terminar una tarea en segundo plano, así que sigue montando su propia vigilancia, ahora con esas mismas condiciones.
+
+Los dos guiones del vigilante, que puede usar cualquier agente, se protegen además solos. Solo puede haber uno en marcha por agente: si se lanza otro, el anterior lo ve y termina. Terminan también si se cierra el proceso que los lanzó, y tienen una vida máxima, de 29 minutos en el modo continuo y de 8 horas en el que espera al cambio, que se puede cambiar con la opción --vida-segundos, o -VidaSegundos en PowerShell. En Windows las instrucciones usan el guion de PowerShell, que hace cada comprobación sin lanzar ningún programa, y el de bash lanza ahora solo dos por comprobación, la espera y el cálculo de las sumas, cuando antes lanzaba varios por cada archivo.
+
+Se estudió también tener un solo vigilante para todos los agentes, pero no es posible de la misma forma en las tres herramientas: agy no deja que un programa externo despierte una sesión abierta, Codex no se despierta al terminar una tarea en segundo plano y Claude Code solo lo permite con una función todavía en pruebas. Por eso cada agente sigue teniendo el suyo, ahora con estas protecciones.
+
+
+3.5.0, del 16 de noviembre de 2026. agy vigila el canal sin gastar
+
+agy ya no mira el canal a cada rato. Sus instrucciones le dan una orden lista para usar: deja en segundo plano el vigilante con la opción nueva --hasta-cambio, o -HastaCambio en PowerShell, que termina en cuanto llega un encargo para el agente o alguien deja una mutación viva, y al terminar agy despierta al agente. Mientras no hay nada para él no gasta nada, y los demás cambios los ve en ese mismo aviso. La orden va completa en las instrucciones, sin código que escribir, porque agy reescribe las variables de PowerShell de una orden escrita a mano y el vigilante dejaba de funcionar sin avisar.
+
+Avisos sin nada que decir. Las instrucciones piden ahora a todos los agentes que, si un aviso del vigilante no trae nada para ellos, no escriban nada y sigan vigilando, en lugar de contar en la terminal lo que ha pasado en el canal.
+
+Modelo y esfuerzo. El manual explica cómo elegir el modelo y el esfuerzo de cada agente una sola vez, dentro de su herramienta, para que valgan en todos tus proyectos.
+
 3.4.0, del 16 de noviembre de 2026. Menos interrupciones y menos gasto
 
 Sin preguntas de permiso al arrancar en Claude Code. La aplicación deja autorizado en el archivo .claude/settings.local.json del proyecto lo que todo agente hace al arrancar, y nada más: saber quién es, mirar la fecha, listar archivos, ver el estado de git, escribir en la carpeta .gestor y poner en marcha su vigilante. Conserva lo que ya tuvieras en ese archivo. Para agy, cuyos permisos se guardan fuera del proyecto, el manual explica qué reglas añadir una sola vez.

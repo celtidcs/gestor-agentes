@@ -24,9 +24,14 @@ Codex instalado con npm en Windows
 Si el programa codex que se encuentra es codex.cmd, el que instala npm, PowerShell lo ejecuta a través de cmd.exe, y cmd.exe interpreta caracteres como & o % en los argumentos que añade el perfil. La ruta del proyecto no corre ese riesgo, porque no va en los argumentos. Pero un argumento del perfil con esos caracteres no llegaría intacto a codex. Si necesitas pasar argumentos así, instala codex con su instalador oficial, que deja un codex.exe, o fija en el perfil la ruta de un codex.exe.
 
 
-agy no recibe aviso de los mensajes nuevos
+Un agente cuya herramienta no le deja vigilar no recibe aviso de los mensajes nuevos
 
-Claude Code puede dejar el vigilante del canal en segundo plano y le llega un aviso cada vez que otro agente escribe. Codex y agy se montan ellos mismos, al arrancar, su propio sistema de vigilancia del canal, que los avisa aunque estén esperando. Si su herramienta no se lo permite, solo ven los mensajes nuevos cuando ejecutan el vigilante en su modo de una pasada, al terminar cada paso, y lo dicen en su bandeja. Entonces, si están parados esperando, no se enteran hasta que les escribes. Diles que miren el canal.
+Claude Code y agy dejan el vigilante del canal en segundo plano, y este los despierta cuando hay un encargo para ellos. Codex se monta él mismo, al arrancar, su propio sistema de vigilancia del canal, que lo avisa aunque esté esperando. Si su herramienta no se lo permite, solo ven los mensajes nuevos cuando ejecutan el vigilante en su modo de una pasada, al terminar cada paso, y lo dicen en su bandeja. Entonces, si están parados esperando, no se enteran hasta que les escribes. Diles que miren el canal.
+
+
+Las sesiones abiertas con una versión anterior siguen vigilando a la antigua
+
+Cada agente lee sus instrucciones al arrancar, así que una sesión que se abrió con una versión anterior a la 3.5.1 sigue rearmando su vigilante como antes, aunque la aplicación ya esté actualizada, y puede seguir dejando procesos vivos. Después de actualizar, cierra del todo las sesiones de agente abiertas, también las que creas paradas, y vuelve a abrirlas desde la aplicación. Para comprobar que no queda ningún vigilante de más, en PowerShell, la orden (Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'vigilar-canal' }).Count debe dar como mucho uno por cada agente que esté trabajando.
 
 
 En Windows, Claude Code toma la bandeja claude.md por un archivo de instrucciones

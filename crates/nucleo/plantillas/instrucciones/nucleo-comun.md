@@ -38,7 +38,7 @@ Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consoli
 - Cada intervención empieza con `LATIDO: <fecha y hora>` tomadas del sistema (`date` o `Get-Date`), nunca a ojo.
 - Un encargo solo existe si dice `Para <agente>`.
 - Escribe en el canal solo con un resultado, una pregunta o un bloqueo: sin acuses ni avisos de arranque. Cita rutas, no copies contenido. Copia al Director solo si decide él. No repitas en la terminal lo del canal.
-- Mantén tu vigilante (paso 8 del arranque) mientras trabajes y atiende en cuanto llegue un mensaje para ti.
+- Mantén tu vigilante (paso 8 del arranque) mientras trabajes y atiende en cuanto llegue un mensaje para ti. Un aviso sin nada para ti no se comenta: rearma y espera.
 - Poda tu bandeja a unas ochenta líneas vivas; lo resuelto va a tu histórico, en tu carpeta.
 - Reservas: antes de modificar un archivo del repositorio, anótalo en `## Reservas activas` de `estado.md` (`- Claude 2, 2026-11-13 10:30: ruta, carpeta/ — motivo`) y bórralo al terminar.
 - Diario: escribe el plan en tu `tarea-en-curso.md` antes de ejecutar y cada hito al alcanzarlo, para que otro pueda retomarlo en el punto exacto. Lo cerrado va a `historico-diario.md`.
@@ -80,4 +80,4 @@ Antes de tocar código, lee `.gestor/consulta/codigo.md`. Tres reglas no se nego
 
 ## 9. Normas de la carpeta proyecto
 
-Debajo, Gestor Agentes copia las normas comunes de la carpeta que contiene los proyectos. Obligan igual que este archivo. Claude Code las carga además por su cuenta desde el original, así que Claude las ve dos veces; no es un error. Si las dos copias difieren, manda la original.
+Debajo, Gestor Agentes copia las normas comunes de la carpeta de los proyectos; obligan igual que este archivo. Claude Code también las carga del original, así que Claude las ve dos veces; si difieren, manda la original.

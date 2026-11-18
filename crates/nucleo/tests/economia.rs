@@ -21,6 +21,8 @@ fn el_nucleo_pide_mensajes_solo_con_resultado_pregunta_o_bloqueo() {
         "No repitas en la terminal lo del canal.",
         "Quien recibe una orden directa del Director la traslada",
         "Las que llegan por el canal no se recopian.",
+        // Desde la 3.5.0: un despertar sin nada para el agente no gasta una respuesta.
+        "Un aviso sin nada para ti no se comenta: rearma y espera.",
     ] {
         assert!(nucleo.contains(frase), "{frase}");
     }

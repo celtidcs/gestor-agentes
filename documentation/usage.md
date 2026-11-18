@@ -147,7 +147,7 @@ Si trabajas con Programator, el modelo local, los demás agentes saben encargarl
 
 Cómo se enteran los agentes de los mensajes
 
-Cada agente tiene un vigilante del canal, que le avisa cuando otro agente escribe. No funciona igual en todas las herramientas. Claude Code lo deja en marcha en segundo plano y recibe un aviso en cuanto hay un mensaje nuevo; si el mensaje va dirigido a él, el aviso lo marca como encargo. Codex y agy se montan ellos mismos, al arrancar, su propio sistema de vigilancia, que los avisa aunque estén esperando. Si su herramienta no les deja, miran el canal al terminar cada paso de su trabajo y lo dicen en su bandeja; en ese caso, si el agente está parado esperando y otro le escribe, no se entera hasta que tú le digas algo, y basta con escribirle que mire el canal.
+Cada agente tiene un vigilante del canal, que le avisa cuando otro agente escribe. No funciona igual en todas las herramientas. Claude Code y agy dejan en segundo plano un vigilante que termina en cuanto hay un encargo para el agente, y al terminar la herramienta lo despierta; el agente atiende el encargo y vuelve a lanzar el vigilante. Mientras no hay nada para él, no gasta nada. Codex se monta él mismo, al arrancar, su propio sistema de vigilancia, que lo avisa aunque esté esperando y termina al cerrarse su sesión. Nunca hay dos vigilantes del mismo agente a la vez, y ninguno sigue en marcha cuando se cierra la sesión que lo lanzó. Si su herramienta no les deja, miran el canal al terminar cada paso de su trabajo y lo dicen en su bandeja; en ese caso, si el agente está parado esperando y otro le escribe, no se entera hasta que tú le digas algo, y basta con escribirle que mire el canal.
 
 
 Cómo va el equipo de un proyecto
@@ -195,6 +195,17 @@ Inicia sesión con la otra cuenta y cierra la ventana. Al volver a abrir Gestor 
 $env:CODEX_HOME = "$HOME\.codex2"; codex
 
 Gestor Agentes no inicia sesión ni guarda contraseñas. Solo reconoce las carpetas de cuenta que ya tienes y abre cada agente con la suya. Gemini y Programator no tienen cuentas separadas.
+
+
+Modelo y esfuerzo de cada agente
+
+Gestor Agentes no elige el modelo ni el esfuerzo de los agentes: lo hace cada herramienta, que es la única que sabe qué modelos tiene tu cuenta. Basta con hacerlo una vez, la primera vez que abras el agente, y vale para todos tus proyectos.
+
+En Claude Code, escribe /model dentro de la sesión, elige el modelo y pulsa Enter; después, /effort, elige el nivel y pulsa Enter. Claude Code guarda las dos cosas en la carpeta de esa cuenta y las usa en las sesiones siguientes, en cualquier proyecto. Si en lugar de Enter pulsas s, el cambio vale solo para esa sesión. El nivel máximo de esfuerzo nunca se guarda: hay que elegirlo cada vez. Si tienes dos cuentas de Claude Code, cada una guarda su propia elección, así que se hace una vez en cada una. Si un proyecto fija su propio modelo en su configuración de Claude Code, ese manda sobre tu elección.
+
+En agy, escribe /model dentro de la sesión y elige el modelo; después, /effort, elige el nivel y pulsa Enter. agy guarda las dos cosas en su configuración general y las usa en las sesiones siguientes, en cualquier proyecto. No todos los modelos tienen todos los niveles: los dos más altos solo aparecen en los modelos que los ofrecen.
+
+Para Codex, consulta en su propia documentación cómo se elige y se guarda el modelo.
 
 
 Permisos de los agentes al arrancar

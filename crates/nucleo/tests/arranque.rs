@@ -100,8 +100,10 @@ fn la_cabecera_da_la_orden_del_vigilante_de_cada_guion_y_modo() {
             guion.ruta_relativa()
         );
     }
-    assert!(cabecera.contains("vigilar-canal.sh --una-vez"));
-    assert!(cabecera.contains("vigilar-canal.ps1 -UnaVez"));
+    assert!(cabecera.contains("vigilar-canal.sh --hasta-cambio"));
+    assert!(cabecera.contains("vigilar-canal.ps1 -HastaCambio"));
+    assert!(cabecera.contains("`--una-vez`"));
+    assert!(cabecera.contains("`-UnaVez`"));
     assert!(cabecera.contains("Monitor"));
 }
 

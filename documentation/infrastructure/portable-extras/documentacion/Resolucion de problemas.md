@@ -71,7 +71,7 @@ El agente busca su papel en el estado del proyecto, en el apartado Papeles, y so
 
 Un agente no se entera de los mensajes de los demás
 
-Depende de la herramienta. Claude Code deja un vigilante en segundo plano que lo avisa en cuanto otro escribe; si ha dejado de avisar, es que se le ha caducado y no lo ha vuelto a armar: pídele que lo arme otra vez. Codex y agy se montan ellos mismos su sistema de vigilancia al arrancar. Si no lo han conseguido, miran el canal al terminar cada paso y lo dicen en su bandeja; entonces, si están parados esperando, no se enterarán hasta que les escribas: basta con decirles que miren el canal. Recuerda también que un mensaje solo es un encargo si empieza diciendo a quién va, por ejemplo Para Codex 1.
+Depende de la herramienta. Claude Code deja un vigilante en segundo plano que lo avisa en cuanto otro escribe; si ha dejado de avisar, es que se le ha caducado y no lo ha vuelto a armar: pídele que lo arme otra vez. agy deja en segundo plano un vigilante que lo despierta con el primer encargo para él; si ha dejado de enterarse, es que no lo ha vuelto a lanzar después de atender el último: pídele que lo lance otra vez. Codex se monta él mismo su sistema de vigilancia al arrancar. Si no lo han conseguido, miran el canal al terminar cada paso y lo dicen en su bandeja; entonces, si están parados esperando, no se enterarán hasta que les escribas: basta con decirles que miren el canal. Recuerda también que un mensaje solo es un encargo si empieza diciendo a quién va, por ejemplo Para Codex 1.
 
 
 No aparece la línea del equipo al seleccionar un proyecto

@@ -70,7 +70,7 @@ Documentos de consulta. Lo que solo se necesita en momentos concretos, como los 
 
 Mensaje inicial. Las herramientas no hacen nada hasta recibir un mensaje, y las instrucciones que cargan al abrirse las tratan como contexto, no como una tarea. Sin un primer mensaje, el agente no ejecutaba su arranque hasta que el usuario le escribía, y entonces atendía lo que le pedían antes que el arranque. El mensaje inicial convierte el arranque en la primera tarea de la sesión.
 
-Vigilante en guiones. Cada herramienta tiene una forma distinta de vigilar, o ninguna. Los guiones de .gestor/vigilante dan una orden concreta y la misma para todas, con un modo continuo para las que pueden vigilar en segundo plano y otro de una pasada para las que no. Toman la identidad de GESTOR_AGENTE, como el resto del sistema.
+Vigilante en guiones. Cada herramienta tiene una forma distinta de vigilar, o ninguna. Los guiones de .gestor/vigilante dan una orden concreta y la misma para todas, con un modo que espera hasta que hay algo para el agente, para las herramientas que lo despiertan al terminar una tarea en segundo plano, uno continuo y otro de una pasada para las que no pueden esperar. Los modos que esperan se cuidan solos: un solo vigilante por agente, fin cuando se cierra quien los lanzó y una vida máxima, para que nunca queden procesos en marcha sin nadie que los escuche. Toman la identidad de GESTOR_AGENTE, como el resto del sistema.
 
 Plantillas incluidas en el binario. El núcleo común viaja dentro del ejecutable y cambia con cada versión, así que todos los proyectos reciben el mismo texto.
 

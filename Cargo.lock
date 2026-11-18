@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "gestor-agentes"
-version = "3.4.0"
+version = "3.5.1"
 dependencies = [
  "chrono",
  "eframe",
@@ -1621,7 +1621,7 @@ dependencies = [
 
 [[package]]
 name = "lanzador"
-version = "3.4.0"
+version = "3.5.1"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "nucleo"
-version = "3.4.0"
+version = "3.5.1"
 dependencies = [
  "chrono",
  "serde",
