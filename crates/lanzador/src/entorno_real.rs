@@ -49,6 +49,29 @@ impl EntornoDelSistema for EntornoReal {
     fn existe(&self, ruta: &Path) -> bool {
         ruta.is_file()
     }
+
+    fn proyecto_de_agy(&self, carpeta_del_proyecto: &Path) -> crate::agy::ProyectoDeAgy {
+        let Some(personal) = self.carpeta_personal() else {
+            return crate::agy::ProyectoDeAgy::Ilegible;
+        };
+        let carpeta = crate::agy::CARPETA_DE_PROYECTOS
+            .iter()
+            .fold(personal, |ruta, parte| ruta.join(parte));
+        let Ok(entradas) = std::fs::read_dir(carpeta) else {
+            return crate::agy::ProyectoDeAgy::Ilegible;
+        };
+        let mut rutas: Vec<PathBuf> = entradas
+            .filter_map(Result::ok)
+            .map(|entrada| entrada.path())
+            .filter(|ruta| ruta.extension().is_some_and(|ext| ext == "json"))
+            .collect();
+        rutas.sort();
+        let textos: Vec<String> = rutas
+            .iter()
+            .filter_map(|ruta| std::fs::read_to_string(ruta).ok())
+            .collect();
+        crate::agy::buscar_proyecto(&textos, carpeta_del_proyecto)
+    }
 }
 
 /// Indica si una ruta es un archivo ejecutable (en Linux, con algún permiso de ejecución, como

@@ -229,9 +229,11 @@ fn el_inicializador_pone_los_avisos_del_canal_en_su_informe() {
         limpio.avisos()
     );
 
+    // Desde la 3.6.0 la preparación añade sola los apartados que faltan (papeles.rs), así que el
+    // aviso de ejemplo es el de una mutación viva, que solo puede resolver un agente.
     carpeta.escribir(
         ".gestor/canal/estado.md",
-        "Estado del proyecto\n\nReservas activas\nNinguna.\n",
+        "Estado del proyecto\n\n## Mutaciones vivas\n- Claude 1, 2026-11-19 10:00: M1 aplicada en src/a.rs\n",
     );
     let informe = entorno.inicializar(carpeta.ruta(), None, None);
 
@@ -239,7 +241,7 @@ fn el_inicializador_pone_los_avisos_del_canal_en_su_informe() {
         informe
             .avisos()
             .iter()
-            .any(|a| a.contains(".gestor/canal/estado.md") && a.contains("## Papeles")),
+            .any(|a| a.contains(".gestor/canal/estado.md")),
         "{:?}",
         informe.avisos()
     );

@@ -349,10 +349,14 @@ fn programa_del_plan(
         }
         Sistema::Linux => {
             let guion = guion_bash(&plan);
-            let resto = guion
-                .split("'; '")
-                .nth(1)
-                .expect("el guion abre un programa");
+            // En la terminal de Codex, el programa va tras la línea que lanza el vigilante.
+            let resto = match guion.split_once(" & fi; '") {
+                Some((_, resto)) => resto,
+                None => guion
+                    .split("'; '")
+                    .nth(1)
+                    .expect("el guion abre un programa"),
+            };
             resto.split('\'').next().unwrap().to_owned()
         }
     }

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use comun::{
     con_su_ejecutable, guion_bash, guion_powershell, peticion, plan, CarpetaTemporal,
-    EntornoDeEnsayo,
+    EntornoDeEnsayo, PROYECTO_AGY,
 };
 use lanzador::{Herramienta, Sistema};
 
@@ -51,6 +51,33 @@ fn hostiles(testigo: &str) -> Vec<String> {
     nombres
 }
 
+/// Ruta del vigilante que la terminal de Codex lanza antes de abrirlo: dos literales del guion de
+/// PowerShell que no vienen de la petición.
+const VIGILANTE_EN_POWERSHELL: &str = r".gestor\vigilante\gestor-vigilante.exe";
+
+/// Prefijo de las opciones `-c` con que Gestor fija las variables de las órdenes de Codex.
+const CLAVE_VARIABLES_CODEX: &str = "shell_environment_policy.set.";
+
+/// Lee cuatro argumentos `-c clave=valor` como los lee Codex: el valor, con un analizador TOML.
+/// Devuelve cada variable con su valor.
+fn variables_de_ordenes_codex(argumentos: &[String]) -> Vec<(String, String)> {
+    argumentos
+        .chunks(2)
+        .map(|par| {
+            assert_eq!(par[0], "-c", "{argumentos:?}");
+            let (clave, valor) = par[1].split_once('=').expect("clave=valor");
+            let variable = clave
+                .strip_prefix(CLAVE_VARIABLES_CODEX)
+                .expect("clave de shell_environment_policy.set");
+            let documento: toml_edit::DocumentMut = format!("v = {valor}\n")
+                .parse()
+                .unwrap_or_else(|error| panic!("{valor} no es TOML válido: {error}"));
+            let valor = documento["v"].as_str().expect("cadena TOML").to_owned();
+            (variable.to_owned(), valor)
+        })
+        .collect()
+}
+
 /// Comprueba que en `guion`, todo lo que va entre comillas simples de PowerShell se lee igual que
 /// el valor original: recorre el texto como lo haría el analizador de PowerShell.
 fn literales_powershell(guion: &str) -> Vec<String> {
@@ -80,8 +107,13 @@ fn literales_powershell(guion: &str) -> Vec<String> {
         }
         literales.push(literal);
     }
+    // La clase en C# que restaura el título es un literal fijo del guion, sin datos de la petición.
+    literales.retain(|literal| !literal.starts_with(CLASE_DEL_TITULO));
     literales
 }
+
+/// Comienzo del literal fijo con la clase en C# que restaura el título de la ventana.
+const CLASE_DEL_TITULO: &str = "public static class GestorAgentesTitulo";
 
 #[test]
 fn powershell_cada_dato_hostil_queda_en_un_solo_literal_intacto() {
@@ -99,6 +131,7 @@ fn powershell_cada_dato_hostil_queda_en_un_solo_literal_intacto() {
         let esperados = vec![
             format!("Claude {nombre} · {nombre}"),
             format!("Claude {nombre}"),
+            carpeta.clone(),
             String::new(),
             format!(r"C:\cfg\{nombre}"),
             carpeta.clone(),
@@ -314,15 +347,44 @@ fn powershell_cada_argumento_hostil_del_perfil_queda_en_su_literal_intacto() {
             let carpeta = format!(r"C:\proyectos\{nombre}");
             let p = peticion_con_argumentos(herramienta, &nombre, &carpeta);
             let guion = guion_powershell(&plan(&p, Sistema::Windows, &entorno));
-            let esperados = vec![
+            let mut esperados = vec![
                 "Claude 2 · Demo".to_owned(),
                 "Claude 2".to_owned(),
                 carpeta.clone(),
+                carpeta.clone(),
                 PROGRAMA_FIJADO.to_owned(),
-                nombre.clone(),
-                format!("--opcion={nombre}"),
             ];
-            assert_eq!(literales_powershell(&guion), esperados, "guion: {guion}");
+            if herramienta == Herramienta::Gemini {
+                esperados.extend(["--project".to_owned(), PROYECTO_AGY.to_owned()]);
+            }
+            esperados.extend([nombre.clone(), format!("--opcion={nombre}")]);
+            let mut literales = literales_powershell(&guion);
+            literales.retain(|l| l != VIGILANTE_EN_POWERSHELL);
+            if herramienta == Herramienta::Codex {
+                esperados.extend(
+                    [
+                        "-s",
+                        "workspace-write",
+                        "-a",
+                        "never",
+                        "-c",
+                        "sandbox_workspace_write.network_access=true",
+                        "-c",
+                        "features.prefer_mxc=true",
+                    ]
+                    .map(String::from),
+                );
+                let variables: Vec<String> = literales.drain(5..9).collect();
+                assert_eq!(
+                    variables_de_ordenes_codex(&variables),
+                    [
+                        ("GESTOR_AGENTE".to_owned(), "Claude 2".to_owned()),
+                        ("GESTOR_PROYECTO".to_owned(), carpeta.clone()),
+                    ],
+                    "guion: {guion}"
+                );
+            }
+            assert_eq!(literales, esperados, "guion: {guion}");
         }
     }
 }
@@ -336,8 +398,37 @@ fn bash_cada_argumento_hostil_del_perfil_queda_en_su_literal_intacto() {
             let p = peticion_con_argumentos(herramienta, &nombre, &carpeta);
             let guion = guion_bash(&plan(&p, Sistema::Linux, &entorno));
             let escapar = |texto: &str| texto.replace('\'', "'\\''");
+            let proyecto = if herramienta == Herramienta::Gemini {
+                format!(" '--project' '{PROYECTO_AGY}'")
+            } else {
+                // Los argumentos -c son los mismos en los dos sistemas: se toman del guion de
+                // PowerShell del mismo plan, se comprueba que Codex los lee bien y se esperan
+                // escapados para bash.
+                let mut literales =
+                    literales_powershell(&guion_powershell(&plan(&p, Sistema::Windows, &entorno)));
+                literales.retain(|l| l != VIGILANTE_EN_POWERSHELL);
+                let variables: Vec<String> = literales.drain(5..9).collect();
+                assert_eq!(
+                    variables_de_ordenes_codex(&variables)[1],
+                    ("GESTOR_PROYECTO".to_owned(), carpeta.clone())
+                );
+                variables
+                    .iter()
+                    .map(|argumento| format!(" '{}'", escapar(argumento)))
+                    .collect()
+            };
+            let permisos = if herramienta == Herramienta::Codex {
+                " '-s' 'workspace-write' '-a' 'never' '-c' 'sandbox_workspace_write.network_access=true'"
+            } else {
+                ""
+            };
+            let vigilante = if herramienta == Herramienta::Codex {
+                "if [ -x '.gestor/vigilante/gestor-vigilante' ]; then '.gestor/vigilante/gestor-vigilante' --persistente --entrega codex --desde-terminal $$ >/dev/null 2>&1 & fi; "
+            } else {
+                ""
+            };
             let esperado = format!(
-                "cd '{}'; '{PROGRAMA_FIJADO}' '{}' '--opcion={}'; exec bash",
+                "cd '{}'; {vigilante}'{PROGRAMA_FIJADO}'{proyecto} '{}' '--opcion={}'{permisos}; exec bash",
                 escapar(&carpeta),
                 escapar(&nombre),
                 escapar(&nombre)
@@ -351,16 +442,21 @@ fn bash_cada_argumento_hostil_del_perfil_queda_en_su_literal_intacto() {
 #[cfg(unix)]
 #[test]
 fn bash_ejecutado_pasa_los_argumentos_hostiles_intactos_sin_inyectar() {
+    use std::os::unix::fs::PermissionsExt;
     use std::process::{Command, Stdio};
     let temporal = CarpetaTemporal::nueva("lanzador-argumentos");
     let raiz = temporal.ruta().to_path_buf();
-    let printf = PathBuf::from("/usr/bin/printf");
-    let entorno = EntornoDeEnsayo::default().con_archivo(printf.clone());
+    // Codex pone delante sus cuatro argumentos -c (GESTOR_AGENTE y GESTOR_PROYECTO): el primero
+    // del perfil es el quinto, y es el que imprime el programa de ensayo.
+    let imprimir = raiz.join("imprimir-argumento.sh");
+    std::fs::write(&imprimir, "#!/bin/sh\nprintf '%s\\n' \"$5\"\n").unwrap();
+    std::fs::set_permissions(&imprimir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let entorno = EntornoDeEnsayo::default().con_archivo(imprimir.clone());
     for nombre in hostiles(TESTIGO) {
-        let mut p = peticion(Herramienta::Gemini);
+        let mut p = peticion(Herramienta::Codex);
         p.carpeta_proyecto = raiz.clone();
-        p.ejecutable = Some(printf.clone());
-        p.argumentos_extra = vec!["%s\\n".to_owned(), nombre.clone()];
+        p.ejecutable = Some(imprimir.clone());
+        p.argumentos_extra = vec![nombre.clone()];
         let guion = guion_bash(&plan(&p, Sistema::Linux, &entorno));
         let salida = Command::new("bash")
             .args(["-c", &guion])
@@ -393,7 +489,8 @@ fn powershell_ejecutado_pasa_los_argumentos_hostiles_intactos_sin_inyectar() {
     let anotado = raiz.join("argumento.txt");
     std::fs::write(
         &escribir,
-        format!("[IO.File]::WriteAllText('{}', $args[0])", anotado.display()),
+        // Codex pone delante sus cuatro argumentos -c: el primero del perfil es $args[4].
+        format!("[IO.File]::WriteAllText('{}', $args[4])", anotado.display()),
     )
     .unwrap();
     let entorno = EntornoDeEnsayo::default().con_archivo(escribir.clone());

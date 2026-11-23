@@ -15,7 +15,8 @@ use nucleo::proyecto::inicializador;
 fn el_nucleo_pide_mensajes_solo_con_resultado_pregunta_o_bloqueo() {
     let nucleo = plantillas::nucleo_comun();
     for frase in [
-        "Escribe en el canal solo con un resultado, una pregunta o un bloqueo: sin acuses ni avisos de arranque.",
+        // Desde la 3.6.0 el acuse RECIBIDO es el único permitido (arranque.rs lo comprueba).
+        "Escribe en el canal solo con un resultado, una pregunta, un bloqueo o un `RECIBIDO`: sin otros acuses ni avisos de arranque.",
         "Cita rutas, no copies contenido.",
         "Copia al Director solo si decide él.",
         "No repitas en la terminal lo del canal.",

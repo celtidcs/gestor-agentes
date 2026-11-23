@@ -8,9 +8,10 @@
 //! .gestor/instrucciones-del-proyecto.md, que la aplicación crea una vez y no vuelve a tocar.
 
 use super::localizador::InstruccionesDelEspacioDeTrabajo;
+use crate::aprendizaje;
 use crate::instrucciones::migracion::TextosDeLaAplicacion;
 use crate::instrucciones::{formato, marcas};
-use crate::plantillas::{self, DocumentoDeConsulta, GuionDelVigilante};
+use crate::plantillas::{self, DocumentoDeConsulta};
 
 /// Archivo único de reglas de todos los agentes. Es el nombre que leen Codex y Antigravity por su
 /// cuenta (https://learn.chatgpt.com/docs/agent-configuration/agents-md y
@@ -51,8 +52,9 @@ pub struct ArchivoGestionado {
     pub texto: String,
 }
 
-/// Archivos que la aplicación escribe enteros: el de reglas, el puntero de Claude, los
-/// documentos de consulta y los guiones del vigilante del canal.
+/// Archivos de texto que la aplicación escribe enteros: el de reglas, el puntero de Claude y los
+/// documentos de consulta. El vigilante del canal es un ejecutable y lo copia
+/// [`super::vigilante`].
 #[must_use]
 pub fn archivos_gestionados(
     espacio_de_trabajo: Option<&InstruccionesDelEspacioDeTrabajo>,
@@ -67,20 +69,16 @@ pub fn archivos_gestionados(
             texto: puntero_claude(),
         },
     ];
+    archivos.push(ArchivoGestionado {
+        ruta_relativa: aprendizaje::RUTA_DEL_DOCUMENTO,
+        texto: aprendizaje::documento(),
+    });
     archivos.extend(
         DocumentoDeConsulta::TODOS
             .iter()
             .map(|documento| ArchivoGestionado {
                 ruta_relativa: documento.ruta_relativa(),
                 texto: documento.texto() + "\n",
-            }),
-    );
-    archivos.extend(
-        GuionDelVigilante::TODOS
-            .iter()
-            .map(|guion| ArchivoGestionado {
-                ruta_relativa: guion.ruta_relativa(),
-                texto: guion.texto() + "\n",
             }),
     );
     archivos

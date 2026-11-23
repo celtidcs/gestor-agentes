@@ -7,11 +7,11 @@
 
 [workspace]
 resolver = "2"
-members = ["crates/nucleo", "crates/lanzador", "crates/interfaz"]
+members = ["crates/canal", "crates/nucleo", "crates/lanzador", "crates/vigilante", "crates/interfaz"]
 
 [workspace.package]
 # Única fuente de la versión del producto (SemVer). Los crates la heredan.
-version = "3.5.1"
+version = "3.7.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 publish = false

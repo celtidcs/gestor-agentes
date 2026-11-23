@@ -20,16 +20,16 @@ pub const ARCHIVO_DE_CLAUDE: &str = ".claude/settings.local.json";
 
 /// Reglas de Claude Code para el arranque, en el orden en que se añaden.
 pub const REGLAS_DE_CLAUDE: [&str; 11] = [
-    "Bash(echo $GESTOR_AGENTE)",
+    "Bash(echo $GESTOR_AGENTE $GESTOR_PROYECTO $PWD)",
     "Bash(date *)",
     "Bash(ls *)",
     "Bash(git status *)",
-    "Bash(bash .gestor/vigilante/vigilar-canal.sh *)",
-    "Bash(powershell -NoProfile -ExecutionPolicy Bypass -File .gestor/vigilante/vigilar-canal.ps1 *)",
-    "PowerShell($env:GESTOR_AGENTE)",
+    "Bash(./.gestor/vigilante/gestor-vigilante *)",
+    "PowerShell(Write-Output $env:GESTOR_AGENTE $env:GESTOR_PROYECTO $PWD.Path)",
     "PowerShell(Get-Date *)",
     "PowerShell(Get-ChildItem *)",
     "PowerShell(git status *)",
+    "PowerShell(./.gestor/vigilante/gestor-vigilante *)",
     "Edit(/.gestor/**)",
 ];
 

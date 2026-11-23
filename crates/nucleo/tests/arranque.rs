@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use nucleo::plantillas::{self, DocumentoDeConsulta, EsqueletoGestor, GuionDelVigilante};
+use nucleo::plantillas::{self, DocumentoDeConsulta, EsqueletoGestor};
 use nucleo::proyecto::catalogo;
 use nucleo::proyecto::localizador::InstruccionesDelEspacioDeTrabajo;
 
@@ -55,10 +55,19 @@ fn el_mensaje_inicial_remite_al_arranque_de_agents_md() {
 }
 
 #[test]
+fn el_arranque_permite_las_herramientas_compartidas_de_fuera_del_proyecto() {
+    // F13: «Nunca leas ni escribas fuera» impedía usar las máquinas virtuales de pruebas.
+    let cabecera = plantillas::cabecera();
+    assert!(cabecera.contains("Nunca escribas fuera de `GESTOR_PROYECTO` ni leas otros proyectos."));
+    assert!(cabecera.contains("Las máquinas virtuales de pruebas sí se usan."));
+    assert!(!cabecera.contains("Nunca leas ni escribas fuera"));
+}
+
+#[test]
 fn el_arranque_esta_en_pasos_numerados_y_en_orden() {
     let cabecera = plantillas::cabecera();
     let pasos = [
-        "1. **Identidad.**",
+        "1. **Identidad y carpeta.**",
         "2. **Preséntate**",
         "3. **Tus archivos.**",
         "4. **Lee enteros:**",
@@ -90,36 +99,50 @@ fn el_papel_se_pregunta_al_director_y_se_espera_la_respuesta() {
 }
 
 #[test]
-fn la_cabecera_da_la_orden_del_vigilante_de_cada_guion_y_modo() {
+fn la_cabecera_da_la_orden_del_vigilante_de_cada_herramienta() {
     let cabecera = plantillas::cabecera();
 
-    for guion in GuionDelVigilante::TODOS {
-        assert!(
-            cabecera.contains(guion.ruta_relativa()),
-            "{}",
-            guion.ruta_relativa()
-        );
-    }
-    assert!(cabecera.contains("vigilar-canal.sh --hasta-cambio"));
-    assert!(cabecera.contains("vigilar-canal.ps1 -HastaCambio"));
+    assert!(cabecera.contains("./.gestor/vigilante/gestor-vigilante"));
+    assert!(cabecera.contains("`--anotar-hilo`"));
+    assert!(cabecera.contains("`--hasta-cambio`"));
     assert!(cabecera.contains("`--una-vez`"));
-    assert!(cabecera.contains("`-UnaVez`"));
+    assert!(cabecera.contains("run_in_background"));
     assert!(cabecera.contains("Monitor"));
+    assert!(!cabecera.contains("vigilar-canal"));
 }
 
 #[test]
-fn los_guiones_del_vigilante_se_escriben_y_el_de_powershell_es_ascii() {
-    let gestionados: Vec<&str> = catalogo::archivos_gestionados(None)
-        .iter()
-        .map(|a| a.ruta_relativa)
-        .collect();
-    for guion in GuionDelVigilante::TODOS {
-        assert!(gestionados.contains(&guion.ruta_relativa()));
+fn sin_identidad_no_hay_arranque_y_la_carpeta_se_compara_con_gestor_proyecto() {
+    let cabecera = plantillas::cabecera();
+    let paso_1 = &cabecera[cabecera.find("1. **Identidad y carpeta.**").unwrap()
+        ..cabecera.find("2. **Preséntate**").unwrap()];
+
+    assert!(paso_1.contains("`GESTOR_AGENTE` está vacía"));
+    assert!(paso_1.contains("no hagas este arranque ni escribas en `.gestor/`"));
+    assert!(paso_1.contains("`GESTOR_PROYECTO`"));
+    assert!(paso_1.contains("para"));
+    assert!(plantillas::mensaje_inicial().contains("GESTOR_PROYECTO"));
+}
+
+#[test]
+fn la_preparacion_ya_no_escribe_los_guiones_del_vigilante_anterior() {
+    for archivo in catalogo::archivos_gestionados(None) {
+        assert!(
+            !archivo.ruta_relativa.contains("vigilar-canal"),
+            "{}",
+            archivo.ruta_relativa
+        );
     }
-    assert!(GuionDelVigilante::PowerShell.texto().is_ascii());
-    assert!(GuionDelVigilante::Bash
-        .texto()
-        .starts_with("#!/usr/bin/env bash\n"));
+}
+
+#[test]
+fn el_nucleo_pide_el_acuse_recibido_y_el_encargo_con_identidad() {
+    let nucleo = plantillas::nucleo_comun();
+
+    assert!(nucleo.contains("`RECIBIDO <hora del sistema>: <encargo>`"));
+    assert!(nucleo.contains("no se borran al podar"));
+    assert!(nucleo.contains("`Para <identidad>`"));
+    assert!(!nucleo.contains("sin acuses ni"));
 }
 
 #[test]

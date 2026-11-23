@@ -8,9 +8,10 @@ use std::path::{Path, PathBuf};
 
 use crate::terminal::{self, Asignacion, TERMINALES_LINUX};
 use crate::textos;
+use crate::toml::cadena_toml;
 use crate::{
     EntornoDelSistema, ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento, PlanDeLanzamiento,
-    Sistema, VARIABLE_IDENTIDAD,
+    Sistema, VARIABLE_IDENTIDAD, VARIABLE_PROYECTO,
 };
 
 /// Nombre del ejecutable de Claude Code, sin extensión.
@@ -57,6 +58,69 @@ const OPCION_RUTA_PROGRAMATOR: &str = "--ruta";
 /// with initial prompt» (https://code.claude.com/docs/en/cli-reference) y «Usage: codex
 /// [OPTIONS] [PROMPT]» (codex --help, el mismo día).
 const OPCION_MENSAJE_AGY: &str = "-i";
+
+/// Permisos con que se abre Codex si el perfil no fija otros ([`permisos_de_codex`]): sandbox de
+/// escritura en el proyecto, con red, y sin pedir nunca aprobación. Valores de
+/// https://learn.chatgpt.com/docs/agent-approvals-security («--ask-for-approval never» y
+/// `sandbox_workspace_write.network_access`, que workspace-write deja apagada si no se activa).
+/// La red hace falta para las VM de pruebas. Orden del Director del 2026-11-22: los agentes
+/// trabajan de forma autónoma, sin pedir permiso para cada tarea.
+const PERMISOS_DE_CODEX: [&str; 6] = [
+    "-s",
+    "workspace-write",
+    "-a",
+    "never",
+    "-c",
+    "sandbox_workspace_write.network_access=true",
+];
+
+/// En Windows, preferir MXC, el sandbox que OpenAI recomienda allí: «[features] prefer_mxc =
+/// true» (https://learn.chatgpt.com/docs/windows/windows-sandbox). Si el equipo no lo admite,
+/// Codex usa su modo de respaldo; `windows.sandbox="mxc"` en cambio falla en ese caso.
+const PREFERIR_MXC: [&str; 2] = ["-c", "features.prefer_mxc=true"];
+
+/// Claves de configuración de Codex que fijan sus permisos. Un perfil que pase cualquiera con
+/// `-c` decide él los permisos y Gestor no añade los suyos.
+const CLAVES_DE_PERMISOS_DE_CODEX: [&str; 5] = [
+    "approval_policy",
+    "sandbox_mode",
+    "sandbox_workspace_write",
+    "features.prefer_mxc",
+    "windows.sandbox",
+];
+
+/// Opciones de Codex con que un perfil fija su sandbox o su aprobación (`codex --help`, 0.167.1).
+const OPCIONES_DE_PERMISOS_DE_CODEX: [&str; 6] = [
+    "-s",
+    "--sandbox",
+    "-a",
+    "--ask-for-approval",
+    "--approve-for-me",
+    "--dangerously-bypass-approvals-and-sandbox",
+];
+
+/// Opción de Codex que fija una clave de configuración solo para esta sesión: «Use `-c` /
+/// `--config` when you need to override an arbitrary key» (https://learn.chatgpt.com/docs/config-file/config-advanced).
+const OPCION_CONFIGURACION_CODEX: &str = "-c";
+
+/// Clave de Codex con las variables que fija en cada orden que ejecuta: «`shell_environment_policy`
+/// controls which environment variables Codex passes to spawned commands», y `set` se aplica
+/// después de las exclusiones (https://learn.chatgpt.com/docs/config-file/config-advanced).
+///
+/// Hace falta porque Codex CLI ejecuta las órdenes en un servicio de fondo que comparten todas
+/// sus sesiones del equipo: el shell de una orden es hijo de ese servicio, no de la terminal que
+/// abrió Gestor, y hereda las variables de la sesión que lo arrancó, que puede ser de otro
+/// proyecto (comprobado con Codex CLI 0.167.1 en Windows el 2026-11-19).
+const CLAVE_VARIABLES_DE_ORDENES_CODEX: &str = "shell_environment_policy.set";
+
+/// Opción de agy que fija su proyecto por id o nombre (`agy --help`, versión 1.5.12). Sin ella
+/// abre su proyecto por defecto.
+const OPCION_PROYECTO_AGY: &str = "--project";
+
+/// Opción de agy que crea un proyecto para la sesión en la carpeta donde se abre: «Create a new
+/// project for this session» (ayuda de agy 1.5.14, `agy --help`). Lo crea con esa carpeta: visto
+/// en ~/.gemini/config/projects/ el 2026-11-22.
+const OPCION_PROYECTO_NUEVO_AGY: &str = "--new-project";
 
 /// Véase [`crate::planificar`].
 pub(crate) fn planificar(
@@ -156,6 +220,8 @@ struct OrdenDeTerminal<'a> {
     programa: &'a Path,
     argumentos: Vec<&'a str>,
     carpetas_a_crear: Vec<PathBuf>,
+    /// Si la terminal lanza antes el vigilante persistente de Codex (solo en el plan de Codex).
+    vigilante_de_codex: bool,
 }
 
 /// Plan que abre una orden en una terminal: PowerShell en Windows y el primer emulador
@@ -175,6 +241,7 @@ fn plan_en_terminal(
                 carpeta,
                 programa,
                 &orden.argumentos,
+                orden.vigilante_de_codex,
             );
             (
                 PathBuf::from(terminal::POWERSHELL),
@@ -182,8 +249,13 @@ fn plan_en_terminal(
             )
         }
         Sistema::Linux => {
-            let guion =
-                terminal::guion_bash(&orden.variables, carpeta, programa, &orden.argumentos);
+            let guion = terminal::guion_bash(
+                &orden.variables,
+                carpeta,
+                programa,
+                &orden.argumentos,
+                orden.vigilante_de_codex,
+            );
             let emulador = TERMINALES_LINUX
                 .iter()
                 .copied()
@@ -220,6 +292,17 @@ fn asignacion_de_identidad(peticion: &PeticionDeLanzamiento) -> Asignacion<'_> {
     }
 }
 
+/// La asignación de GESTOR_PROYECTO, con la carpeta del proyecto, o el error si su ruta no es
+/// Unicode válido.
+fn asignacion_de_proyecto(
+    peticion: &PeticionDeLanzamiento,
+) -> Result<Asignacion<'_>, ErrorDeLanzamiento> {
+    Ok(Asignacion {
+        nombre: VARIABLE_PROYECTO,
+        valor: como_texto(&peticion.carpeta_proyecto)?,
+    })
+}
+
 /// Claude Code en una terminal: PowerShell en Windows y el primer emulador disponible en Linux.
 /// Si el programa no se encuentra, es un error. La 2.3.2 confiaba entonces en que el intérprete
 /// lo encontrase por su nombre, pero desde la 3.0.0 la detección y el lanzamiento usan la misma
@@ -237,6 +320,7 @@ fn plan_de_claude(
         .transpose()?;
     let mut variables = vec![
         asignacion_de_identidad(peticion),
+        asignacion_de_proyecto(peticion)?,
         Asignacion {
             nombre: VARIABLE_CLAUDECODE,
             valor: "",
@@ -256,6 +340,7 @@ fn plan_de_claude(
             programa: &ejecutable,
             argumentos: mensaje_inicial(peticion).into_iter().collect(),
             carpetas_a_crear: peticion.directorio_configuracion.iter().cloned().collect(),
+            vigilante_de_codex: false,
         },
         sistema,
         entorno,
@@ -270,7 +355,8 @@ fn como_texto(ruta: &Path) -> Result<&str, ErrorDeLanzamiento> {
         })
 }
 
-/// Codex CLI en una terminal, en la carpeta del proyecto, con GESTOR_AGENTE, CODEX_HOME si el
+/// Codex CLI en una terminal, en la carpeta del proyecto, con GESTOR_AGENTE y GESTOR_PROYECTO en
+/// la terminal y en las órdenes de la sesión ([`variables_de_ordenes_codex`]), CODEX_HOME si el
 /// perfil la trae y los argumentos del perfil.
 fn plan_de_codex(
     peticion: &PeticionDeLanzamiento,
@@ -278,12 +364,16 @@ fn plan_de_codex(
     entorno: &dyn EntornoDelSistema,
 ) -> Result<PlanDeLanzamiento, ErrorDeLanzamiento> {
     let ejecutable = ejecutable_de(peticion, sistema, entorno)?;
+    let variables_de_ordenes = variables_de_ordenes_codex(peticion)?;
     let configuracion = peticion
         .directorio_configuracion
         .as_deref()
         .map(como_texto)
         .transpose()?;
-    let mut variables = vec![asignacion_de_identidad(peticion)];
+    let mut variables = vec![
+        asignacion_de_identidad(peticion),
+        asignacion_de_proyecto(peticion)?,
+    ];
     if let Some(carpeta) = configuracion {
         variables.push(Asignacion {
             nombre: VARIABLE_CONFIGURACION_CODEX,
@@ -296,15 +386,94 @@ fn plan_de_codex(
             variables,
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
-            argumentos: argumentos_del_perfil(peticion)
-                .into_iter()
+            argumentos: variables_de_ordenes
+                .iter()
+                .map(String::as_str)
+                .chain(argumentos_del_perfil(peticion))
+                .chain(permisos_de_codex(peticion, sistema))
                 .chain(mensaje_inicial(peticion))
                 .collect(),
             carpetas_a_crear: peticion.directorio_configuracion.iter().cloned().collect(),
+            vigilante_de_codex: true,
         },
         sistema,
         entorno,
     )
+}
+
+/// Opciones `-c shell_environment_policy.set.<variable>=<valor>` con GESTOR_AGENTE y
+/// GESTOR_PROYECTO, para que lleguen a las órdenes de esta sesión de Codex aunque el servicio
+/// que las ejecuta lo arrancase otra ([`CLAVE_VARIABLES_DE_ORDENES_CODEX`]). Van antes de los
+/// argumentos del perfil: la identidad y la carpeta las fija Gestor. Devuelve el error si la
+/// carpeta no es Unicode válido.
+fn variables_de_ordenes_codex(
+    peticion: &PeticionDeLanzamiento,
+) -> Result<Vec<String>, ErrorDeLanzamiento> {
+    let variables = [
+        asignacion_de_identidad(peticion),
+        asignacion_de_proyecto(peticion)?,
+    ];
+    Ok(variables
+        .iter()
+        .flat_map(|variable| {
+            [
+                OPCION_CONFIGURACION_CODEX.to_owned(),
+                format!(
+                    "{CLAVE_VARIABLES_DE_ORDENES_CODEX}.{}={}",
+                    variable.nombre,
+                    cadena_toml(variable.valor)
+                ),
+            ]
+        })
+        .collect())
+}
+
+/// Permisos con que se abre Codex ([`PERMISOS_DE_CODEX`], más [`PREFERIR_MXC`] en Windows): lee,
+/// escribe en el proyecto y usa la red sin pedir aprobación, dentro de su sandbox. Comprobado
+/// con codex exec 0.167.1 en Windows 11 el 2026-11-22, sin ninguna aprobación. Si el perfil ya
+/// fija el sandbox o la aprobación, con una opción o con una clave de configuración, manda el
+/// perfil y no se añade nada.
+fn permisos_de_codex(peticion: &PeticionDeLanzamiento, sistema: Sistema) -> Vec<&'static str> {
+    if peticion
+        .argumentos_extra
+        .iter()
+        .any(|argumento| fija_permisos_de_codex(argumento))
+    {
+        return Vec::new();
+    }
+    let mut permisos = PERMISOS_DE_CODEX.to_vec();
+    if sistema == Sistema::Windows {
+        permisos.extend(PREFERIR_MXC);
+    }
+    permisos
+}
+
+/// Indica si un argumento del perfil fija los permisos de Codex: una de
+/// [`OPCIONES_DE_PERMISOS_DE_CODEX`], sola o con «=valor», o una de
+/// [`CLAVES_DE_PERMISOS_DE_CODEX`] seguida de «=» o «.», como el valor de un `-c`.
+fn fija_permisos_de_codex(argumento: &str) -> bool {
+    let con_valor = |prefijo: &str, separadores: &[char]| {
+        argumento
+            .strip_prefix(prefijo)
+            .is_some_and(|resto| resto.starts_with(separadores))
+    };
+    OPCIONES_DE_PERMISOS_DE_CODEX
+        .iter()
+        .any(|opcion| argumento == *opcion || con_valor(opcion, &['=']))
+        || CLAVES_DE_PERMISOS_DE_CODEX
+            .iter()
+            .any(|clave| con_valor(clave, &['=', '.']))
+}
+
+/// Opciones de agy para abrir la sesión en el proyecto de la carpeta: `--project <id>` si lo
+/// tiene, `--new-project` si los proyectos se leen y ninguno la tiene, y nada si no se entiende
+/// ningún proyecto (entonces no se abre).
+fn opciones_de_proyecto_agy(proyecto: crate::agy::ProyectoDeAgy) -> Option<Vec<String>> {
+    match proyecto {
+        crate::agy::ProyectoDeAgy::Encontrado(id) => Some(vec![OPCION_PROYECTO_AGY.to_owned(), id]),
+        crate::agy::ProyectoDeAgy::Falta => Some(vec![OPCION_PROYECTO_NUEVO_AGY.to_owned()]),
+        crate::agy::ProyectoDeAgy::Ilegible => None,
+    }
 }
 
 /// Gemini con agy en una terminal, en la carpeta del proyecto, con GESTOR_AGENTE (agy la pasa a
@@ -316,14 +485,23 @@ fn plan_de_gemini(
     entorno: &dyn EntornoDelSistema,
 ) -> Result<PlanDeLanzamiento, ErrorDeLanzamiento> {
     let ejecutable = ejecutable_de(peticion, sistema, entorno)?;
+    let proyecto = opciones_de_proyecto_agy(entorno.proyecto_de_agy(&peticion.carpeta_proyecto))
+        .ok_or_else(|| ErrorDeLanzamiento::SinProyectoDeAgy {
+            carpeta: peticion.carpeta_proyecto.clone(),
+        })?;
     plan_en_terminal(
         OrdenDeTerminal {
             titulo: titulo(peticion),
-            variables: vec![asignacion_de_identidad(peticion)],
+            variables: vec![
+                asignacion_de_identidad(peticion),
+                asignacion_de_proyecto(peticion)?,
+            ],
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
-            argumentos: argumentos_del_perfil(peticion)
-                .into_iter()
+            argumentos: proyecto
+                .iter()
+                .map(String::as_str)
+                .chain(argumentos_del_perfil(peticion))
                 .chain(
                     mensaje_inicial(peticion)
                         .into_iter()
@@ -331,6 +509,7 @@ fn plan_de_gemini(
                 )
                 .collect(),
             carpetas_a_crear: Vec::new(),
+            vigilante_de_codex: false,
         },
         sistema,
         entorno,
@@ -425,6 +604,7 @@ fn plan_de_programator(
                     como_texto(&peticion.carpeta_proyecto)?,
                 ],
                 carpetas_a_crear: Vec::new(),
+                vigilante_de_codex: false,
             },
             sistema,
             entorno,

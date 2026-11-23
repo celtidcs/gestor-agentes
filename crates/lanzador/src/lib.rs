@@ -28,6 +28,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+pub mod agy;
 mod base64;
 mod ejecucion;
 mod entorno_real;
@@ -35,6 +36,7 @@ mod escapes;
 mod planificacion;
 mod terminal;
 mod textos;
+mod toml;
 
 pub use entorno_real::EntornoReal;
 
@@ -42,6 +44,12 @@ pub use entorno_real::EntornoReal;
 /// único archivo de reglas desde la 3.0.0) para que cada agente sepa qué bandeja y qué diario
 /// son suyos.
 pub const VARIABLE_IDENTIDAD: &str = "GESTOR_AGENTE";
+
+/// Variable con la ruta absoluta del proyecto que se pone a Claude Code, Codex y agy. El arranque
+/// de AGENTS.md la compara con la carpeta en que trabaja la sesión, para que un agente que se
+/// abra en otra carpeta lo note y pare antes de escribir nada (incidente de agy del 2026-11-18,
+/// que trabajó en otro proyecto).
+pub const VARIABLE_PROYECTO: &str = "GESTOR_PROYECTO";
 
 /// Herramienta que se abre, siempre en una terminal y en la carpeta del proyecto. Programator es
 /// nuevo en la 3.0.0.
@@ -142,6 +150,8 @@ pub trait EntornoDelSistema {
     fn carpeta_de_datos_locales(&self) -> Option<PathBuf>;
     /// Indica si existe un archivo.
     fn existe(&self, ruta: &Path) -> bool;
+    /// El proyecto de agy de la carpeta dada (véase [`agy::buscar_proyecto`]).
+    fn proyecto_de_agy(&self, carpeta: &Path) -> agy::ProyectoDeAgy;
 }
 
 /// Errores de lanzamiento, con lo necesario para explicárselos al usuario.
@@ -169,6 +179,13 @@ pub enum ErrorDeLanzamiento {
     RutaNoUnicode {
         /// Ruta rechazada.
         ruta: PathBuf,
+    },
+    /// No se entiende ningún proyecto de agy, así que no se sabe si la carpeta tiene el suyo. Sin
+    /// él agy abriría su proyecto por defecto, que puede ser otro.
+    #[error("no se pueden leer los proyectos de Antigravity para saber cuál tiene la carpeta {}: ábrela una vez en Antigravity como proyecto y vuelve a lanzar", carpeta.display())]
+    SinProyectoDeAgy {
+        /// Carpeta del proyecto.
+        carpeta: PathBuf,
     },
     /// No se pudo crear una carpeta del plan.
     #[error("no se pudo crear la carpeta {carpeta}: {origen}")]

@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 nucleo = { path = "../nucleo" }
 lanzador = { path = "../lanzador" }
+vigilante = { path = "../vigilante" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 thiserror = "2"
 # Ventana: eframe sin funciones por defecto, con el motor glow, las fuentes incluidas, X11 y

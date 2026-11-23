@@ -33,6 +33,10 @@ pub const COMPROBAR_ACTUALIZACIONES_POR_DEFECTO: bool = true;
 /// Repositorio público donde se publican las versiones de Gestor Agentes.
 pub const REPOSITORIO_DE_ACTUALIZACIONES_POR_DEFECTO: &str = "celtidcs/gestor-agentes";
 
+/// Repositorio público donde se publican las versiones de Programator, con el que se compara la
+/// versión del Programator de la ruta (F7).
+pub const REPOSITORIO_DE_PROGRAMATOR_POR_DEFECTO: &str = "celtidcs/Programator";
+
 /// Segundos que se espera a GitHub por defecto. La consulta va en su propio hilo y no retrasa
 /// nada; cinco segundos bastan a una petición pequeña y cortan pronto una red que no responde.
 pub const TIEMPO_MAXIMO_ACTUALIZACION_POR_DEFECTO: u64 = 5;
@@ -66,6 +70,12 @@ pub struct Ajustes {
         default = "repositorio_de_actualizaciones_por_defecto"
     )]
     repositorio_de_actualizaciones: String,
+    /// Repositorio de GitHub donde se publican las versiones de Programator.
+    #[serde(
+        rename = "RepositorioDeProgramator",
+        default = "repositorio_de_programator_por_defecto"
+    )]
+    repositorio_de_programator: String,
     /// Segundos que se espera a la respuesta de GitHub.
     #[serde(
         rename = "TiempoMaximoActualizacionSegundos",
@@ -100,6 +110,10 @@ fn repositorio_de_actualizaciones_por_defecto() -> String {
     REPOSITORIO_DE_ACTUALIZACIONES_POR_DEFECTO.to_owned()
 }
 
+fn repositorio_de_programator_por_defecto() -> String {
+    REPOSITORIO_DE_PROGRAMATOR_POR_DEFECTO.to_owned()
+}
+
 const fn tiempo_maximo_actualizacion_por_defecto() -> u64 {
     TIEMPO_MAXIMO_ACTUALIZACION_POR_DEFECTO
 }
@@ -111,6 +125,7 @@ impl Default for Ajustes {
             limite_de_bandeja_bytes: LIMITE_DE_BANDEJA_POR_DEFECTO,
             comprobar_actualizaciones: COMPROBAR_ACTUALIZACIONES_POR_DEFECTO,
             repositorio_de_actualizaciones: repositorio_de_actualizaciones_por_defecto(),
+            repositorio_de_programator: repositorio_de_programator_por_defecto(),
             tiempo_maximo_actualizacion_segundos: TIEMPO_MAXIMO_ACTUALIZACION_POR_DEFECTO,
             limite_de_latido_horas: LIMITE_DE_LATIDO_POR_DEFECTO,
         }
@@ -137,7 +152,9 @@ impl Ajustes {
         if self.tiempo_maximo_actualizacion_segundos == 0 {
             return Err(textos::AJUSTE_TIEMPO_ACTUALIZACION_CERO);
         }
-        if !actualizaciones::repositorio_valido(&self.repositorio_de_actualizaciones) {
+        if !actualizaciones::repositorio_valido(&self.repositorio_de_actualizaciones)
+            || !actualizaciones::repositorio_valido(&self.repositorio_de_programator)
+        {
             return Err(textos::AJUSTE_REPOSITORIO_INVALIDO);
         }
         Ok(self)
@@ -171,6 +188,12 @@ impl Ajustes {
     #[must_use]
     pub fn repositorio_de_actualizaciones(&self) -> &str {
         &self.repositorio_de_actualizaciones
+    }
+
+    /// Repositorio de GitHub donde se publican las versiones de Programator.
+    #[must_use]
+    pub fn repositorio_de_programator(&self) -> &str {
+        &self.repositorio_de_programator
     }
 
     /// Tiempo máximo que se espera a la respuesta de GitHub.

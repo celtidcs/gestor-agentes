@@ -23,9 +23,6 @@ const APARTADO_MUTACIONES: &str = "## Mutaciones vivas";
 /// Apartado de las autoexclusiones de funciones.
 const APARTADO_AUTOEXCLUSIONES: &str = "## Autoexclusiones vigentes";
 
-/// Texto con el que la plantilla dice que un apartado está vacío.
-const VACIO: &str = "Ninguna.";
-
 /// Principio de la línea del Jefe en el apartado de papeles de la plantilla.
 const LINEA_DEL_JEFE: &str = "- Jefe de proyecto:";
 
@@ -109,6 +106,9 @@ pub struct ResumenDelEquipo {
     pub mutaciones_vivas: bool,
     /// Si hay autoexclusiones vigentes.
     pub autoexclusiones: bool,
+    /// Vigilancia de cada agente que tiene algo anotado. [`resumir`] la deja vacía, porque leerla
+    /// toca el disco y los procesos; la rellena quien llama.
+    pub vigilancia: Vec<super::vigilancia::VigilanciaDeAgente>,
 }
 
 /// Revisa el canal y devuelve lo que no cuadra, en el orden en que se comprueba.
@@ -171,6 +171,7 @@ pub fn resumir(estado: &str, bandejas: &[Bandeja]) -> ResumenDelEquipo {
         reservas: leer_reservas(estado).0.len(),
         mutaciones_vivas: hay_contenido(estado, APARTADO_MUTACIONES),
         autoexclusiones: hay_contenido(estado, APARTADO_AUTOEXCLUSIONES),
+        vigilancia: Vec::new(),
     }
 }
 
@@ -215,7 +216,7 @@ pub fn latidos(bandejas: &[Bandeja]) -> Vec<Latido> {
 }
 
 /// Fecha y hora de una línea «LATIDO: <fecha hora>», si la tiene.
-fn latido_de(linea: &str) -> Option<NaiveDateTime> {
+pub(crate) fn latido_de(linea: &str) -> Option<NaiveDateTime> {
     let resto = linea.trim().strip_prefix(MARCA_DE_LATIDO)?.trim();
     FORMATOS_DE_LATIDO.iter().find_map(|formato| {
         // La hora puede ir seguida de texto: se prueba con los caracteres justos de cada formato.
@@ -235,13 +236,13 @@ fn longitud_de(formato: &str) -> usize {
 }
 
 /// Líneas del apartado `titulo` de estado.md, sin el título, o nada si no está. Acaba en el
-/// siguiente título.
+/// siguiente título, aunque lleve espacios delante, como el apartado de mutaciones del crate canal.
 fn apartado_de<'a>(estado: &'a str, titulo: &str) -> Option<Vec<&'a str>> {
     let mut lineas = estado.lines();
     lineas.find(|l| l.trim() == titulo)?;
     Some(
         lineas
-            .take_while(|l| !l.starts_with('#'))
+            .take_while(|l| !l.trim_start().starts_with('#'))
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .collect(),
@@ -250,7 +251,8 @@ fn apartado_de<'a>(estado: &'a str, titulo: &str) -> Option<Vec<&'a str>> {
 
 /// Si el apartado existe y dice algo distinto de «Ninguna.».
 fn hay_contenido(estado: &str, titulo: &str) -> bool {
-    apartado_de(estado, titulo).is_some_and(|lineas| lineas.iter().any(|l| *l != VACIO))
+    apartado_de(estado, titulo)
+        .is_some_and(|lineas| lineas.iter().any(|l| !canal::mutaciones::es_vacio(l)))
 }
 
 /// Reservas legibles de estado.md y las líneas de reserva que no siguen el formato.

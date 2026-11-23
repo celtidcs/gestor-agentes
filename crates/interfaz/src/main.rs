@@ -39,6 +39,7 @@ fn abrir() -> Result<(), Box<dyn std::error::Error>> {
     let configuracion = Configuracion::new(arranque::carpeta_de_datos()?);
     let ajustes = configuracion.cargar_ajustes()?;
     let consulta = Consulta::desde(&ajustes);
+    let consulta_de_programator = Consulta::de_programator(&ajustes);
     let aplicacion = arranque::estado_inicial(
         &configuracion,
         Box::new(ServiciosReales::new(configuracion.clone())),
@@ -76,9 +77,16 @@ fn abrir() -> Result<(), Box<dyn std::error::Error>> {
                 Box::new(ConsultorGithub),
                 Box::new(move || contexto.request_repaint()),
             );
+            let contexto = creacion.egui_ctx.clone();
+            let programator = actualizaciones::programator_en_segundo_plano(
+                consulta_de_programator,
+                Box::new(ConsultorGithub),
+                Box::new(move || contexto.request_repaint()),
+            );
             Ok(Box::new(
                 Ventana::new(aplicacion, trabajador, nucleo::plantillas::nucleo_comun())
-                    .con_avisos_de_version(avisos),
+                    .con_avisos_de_version(avisos)
+                    .con_avisos_de_programator(programator),
             ))
         }),
     )?;

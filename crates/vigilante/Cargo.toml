@@ -1,0 +1,20 @@
+[package]
+name = "vigilante"
+description = "Vigilante del canal de Gestor Agentes: avisa a un agente de sus encargos y mutaciones vivas, y en Codex se los entrega en su sesión."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "gestor-vigilante"
+path = "src/main.rs"
+
+[dependencies]
+canal = { path = "../canal" }
+# Árbol de procesos (padre y hora de arranque de cada uno) sin código inseguro propio: el
+# vigilante termina cuando muere quien lo lanzó. Solo la parte de procesos, sin discos ni red.
+sysinfo = { version = "0.37", default-features = false, features = ["system"] }

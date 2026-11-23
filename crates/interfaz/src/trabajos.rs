@@ -9,15 +9,21 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
 use lanzador::{ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento};
+use nucleo::actualizaciones::Version;
 use nucleo::agentes::IdentidadAgente;
-use nucleo::configuracion::PerfilDeAgente;
-use nucleo::cuentas::{self, CarpetaPersonal};
-use nucleo::proyecto::informe::InformeDeInicializacion;
+use nucleo::configuracion::{HerramientaDelPerfil, PerfilDeAgente};
+use nucleo::cuentas::{self, AltaRechazada, CarpetaPersonal};
+use nucleo::proyecto::informe::{InformeDeInicializacion, TipoDeCambio};
+use nucleo::proyecto::papeles::Papel;
 
-use crate::perfiles::{self, Disponibilidad};
+use crate::perfiles::{self, CarpetaDelAgente, Disponibilidad};
+use crate::textos;
 
 /// Nombre del hilo de trabajo, para los volcados y los depuradores.
 const NOMBRE_DEL_HILO: &str = "gestor-agentes-trabajos";
+
+/// Estado del canal, donde se anota el papel elegido.
+const RUTA_DEL_ESTADO: &str = ".gestor/canal/estado.md";
 
 /// Trabajo que la ventana encarga.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +38,9 @@ pub enum Trabajo {
         ruta: String,
         /// Perfil que se abre.
         perfil: PerfilDeAgente,
+        /// Papel que el Director ha elegido en la ventana, que se anota en estado.md. Nada si no ha
+        /// elegido: el agente lo pregunta al arrancar.
+        papel: Option<Papel>,
     },
     /// Borrar la carpeta del proyecto con todo su contenido.
     Borrar {
@@ -49,6 +58,13 @@ pub enum Trabajo {
     ElegirEjecutable {
         /// Posición del perfil.
         indice: usize,
+    },
+    /// Elegir la carpeta de una cuenta, darla de alta y volver a buscar los agentes.
+    DarDeAltaCuenta {
+        /// Herramienta de la cuenta (Claude o Codex).
+        herramienta: HerramientaDelPerfil,
+        /// Perfiles guardados.
+        perfiles: Vec<PerfilDeAgente>,
     },
 }
 
@@ -98,9 +114,13 @@ pub enum ResultadoDeTrabajo {
         perfiles: Vec<PerfilDeAgente>,
         /// Disponibilidad de cada perfil, en el mismo orden.
         disponibilidad: Vec<Disponibilidad>,
+        /// Carpeta donde vive cada perfil y si existe, en el mismo orden; nada si no se sabe.
+        carpetas: Vec<Option<CarpetaDelAgente>>,
         /// Cuántos perfiles son nuevos y hay que guardar.
         anadidos: usize,
     },
+    /// La cuenta no se ha dado de alta: nada si el usuario canceló, o el motivo del rechazo.
+    CuentaNoAnadida(Option<AltaRechazada>),
     /// Ejecutable elegido para un perfil, o nada si el usuario canceló.
     EjecutableElegido {
         /// Posición del perfil.
@@ -116,8 +136,21 @@ pub trait Motor {
     fn elegir_carpeta(&self) -> Option<PathBuf>;
     /// Muestra el selector de archivos para un ejecutable y devuelve el elegido.
     fn elegir_ejecutable(&self) -> Option<PathBuf>;
+    /// Muestra el selector de carpetas para la carpeta de una cuenta y devuelve la elegida.
+    fn elegir_carpeta_de_cuenta(&self) -> Option<PathBuf>;
+    /// Versión que declara el ejecutable en su recurso de versión, si la lleva (ver
+    /// [`nucleo::version_de_programa::version_en_recurso`]).
+    fn version_del_ejecutable(&self, ruta: &Path) -> Option<Version>;
     /// Prepara el proyecto para la identidad indicada.
     fn preparar(&self, raiz: &Path, identidad: Option<IdentidadAgente>) -> InformeDeInicializacion;
+
+    /// Anota en estado.md del proyecto el papel elegido para esa identidad. Devuelve si ha cambiado
+    /// algo.
+    ///
+    /// # Errors
+    ///
+    /// El error de disco al leer o escribir estado.md.
+    fn anotar_papel(&self, raiz: &Path, identidad: &str, papel: Papel) -> std::io::Result<bool>;
     /// Carpeta personal del usuario, para sustituir «~» en los perfiles.
     fn carpeta_personal(&self) -> Option<PathBuf>;
     /// Decide cómo se abre la petición.
@@ -168,13 +201,27 @@ pub fn ejecutar(trabajo: Trabajo, motor: &dyn Motor) -> ResultadoDeTrabajo {
             nombre,
             ruta,
             perfil,
+            papel,
         } => {
             let carpeta = PathBuf::from(&ruta);
-            let informe = motor.preparar(&carpeta, perfiles::identidad_a_preparar(&perfil));
+            let mut informe = motor.preparar(&carpeta, perfiles::identidad_a_preparar(&perfil));
             let tamano_instrucciones = perfiles::archivo_vigilado(&perfil)
                 .and_then(|archivo| motor.tamano(&carpeta.join(archivo)));
             let personal = motor.carpeta_personal();
             let peticion = perfiles::peticion(&perfil, &nombre, &carpeta, personal.as_deref());
+            if let Some(papel) = papel {
+                match motor.anotar_papel(&carpeta, &peticion.identidad, papel) {
+                    Ok(true) => informe.anotar_cambio(
+                        RUTA_DEL_ESTADO,
+                        TipoDeCambio::Actualizado,
+                        Some(textos::papel_anotado(&peticion.identidad, papel)),
+                    ),
+                    Ok(false) => {}
+                    Err(error) => {
+                        informe.anotar_error(format!("{RUTA_DEL_ESTADO}: {error}"));
+                    }
+                }
+            }
             let lanzamiento = lanzar(&peticion, motor);
             ResultadoDeTrabajo::Abierto {
                 nombre,
@@ -201,6 +248,10 @@ pub fn ejecutar(trabajo: Trabajo, motor: &dyn Motor) -> ResultadoDeTrabajo {
             indice,
             ruta: motor.elegir_ejecutable(),
         },
+        Trabajo::DarDeAltaCuenta {
+            herramienta,
+            perfiles,
+        } => dar_de_alta_cuenta(herramienta, perfiles, motor),
     }
 }
 
@@ -225,25 +276,76 @@ fn detectar(mut lista: Vec<PerfilDeAgente>, motor: &dyn Motor) -> ResultadoDeTra
             cuentas::perfiles_de_cuentas(&motor.explorar_cuentas(carpeta)),
         )
     });
-    let disponibilidad = lista
+    let (disponibilidad, carpetas) = lista
         .iter()
-        .map(|perfil| {
-            let fijado = perfiles::ejecutable_fijado(perfil, personal.as_deref());
-            let ejecutable =
-                motor.detectar_ejecutable(perfiles::herramienta(perfil.tipo()), fijado.as_deref());
-            let cuenta =
-                perfiles::carpeta_de_cuenta_exigida(perfil, personal.as_deref()).map(|carpeta| {
-                    let existe = motor.existe_carpeta(&carpeta);
-                    (carpeta, existe)
-                });
-            perfiles::disponibilidad(ejecutable, cuenta)
-        })
-        .collect();
+        .map(|perfil| detectar_perfil(perfil, personal.as_deref(), motor))
+        .unzip();
     ResultadoDeTrabajo::Detectado {
         perfiles: lista,
         disponibilidad,
+        carpetas,
         anadidos,
     }
+}
+
+/// Pide la carpeta de la cuenta, la da de alta (ver [`cuentas::dar_de_alta`]) y vuelve a buscar
+/// los agentes, contando el perfil nuevo entre los que hay que guardar.
+fn dar_de_alta_cuenta(
+    herramienta: HerramientaDelPerfil,
+    mut lista: Vec<PerfilDeAgente>,
+    motor: &dyn Motor,
+) -> ResultadoDeTrabajo {
+    let Some(carpeta) = motor.elegir_carpeta_de_cuenta() else {
+        return ResultadoDeTrabajo::CuentaNoAnadida(None);
+    };
+    let personal = motor.carpeta_personal().unwrap_or_default();
+    if let Err(rechazo) = cuentas::dar_de_alta(&mut lista, herramienta, &carpeta, &personal) {
+        return ResultadoDeTrabajo::CuentaNoAnadida(Some(rechazo));
+    }
+    match detectar(lista, motor) {
+        ResultadoDeTrabajo::Detectado {
+            perfiles,
+            disponibilidad,
+            carpetas,
+            anadidos,
+        } => ResultadoDeTrabajo::Detectado {
+            perfiles,
+            disponibilidad,
+            carpetas,
+            anadidos: anadidos + 1,
+        },
+        otro => otro,
+    }
+}
+
+/// Disponibilidad de un perfil y carpeta donde vive. La carpeta se mira una sola vez en el disco
+/// y sirve también de cuenta exigida cuando el perfil la exige.
+fn detectar_perfil(
+    perfil: &PerfilDeAgente,
+    personal: Option<&Path>,
+    motor: &dyn Motor,
+) -> (Disponibilidad, Option<CarpetaDelAgente>) {
+    let fijado = perfiles::ejecutable_fijado(perfil, personal);
+    let ejecutable =
+        motor.detectar_ejecutable(perfiles::herramienta(perfil.tipo()), fijado.as_deref());
+    let version = match (&ejecutable, perfil.tipo()) {
+        (Some(programa), HerramientaDelPerfil::Programator) => {
+            motor.version_del_ejecutable(programa)
+        }
+        _ => None,
+    };
+    let carpeta = perfiles::carpeta_del_agente(perfil, personal).map(|ruta| {
+        let existe = motor.existe_carpeta(&ruta);
+        CarpetaDelAgente::new(ruta, existe).con_version(version)
+    });
+    let cuenta = perfiles::carpeta_de_cuenta_exigida(perfil, personal).map(|exigida| {
+        let existe = carpeta
+            .as_ref()
+            .filter(|vista| vista.ruta() == exigida)
+            .map_or_else(|| motor.existe_carpeta(&exigida), CarpetaDelAgente::existe);
+        (exigida, existe)
+    });
+    (perfiles::disponibilidad(ejecutable, cuenta), carpeta)
 }
 
 /// El hilo de trabajo ya no existe.

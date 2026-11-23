@@ -239,13 +239,13 @@ impl PerfilDeAgente {
         expandir(self.ejecutable.as_deref(), carpeta_usuario)
     }
 
-    /// Perfiles de una instalación nueva: los de la 2.3.2 más Programator, sin ejecutable hasta
-    /// que el usuario lo indique.
+    /// Perfiles de una instalación nueva: una cuenta de cada herramienta, sin ejecutable hasta que
+    /// el usuario lo indique. Las demás cuentas las añade la detección al abrir la ventana (ver
+    /// [`crate::cuentas::incorporar`]) o el alta a mano ([`crate::cuentas::dar_de_alta`]).
     #[must_use]
     pub fn por_defecto() -> Vec<Self> {
         vec![
             Self::new(HerramientaDelPerfil::Claude, 1).con_directorio("~/.claude"),
-            Self::new(HerramientaDelPerfil::Claude, 2).con_directorio("~/.claude2"),
             Self::new(HerramientaDelPerfil::Codex, 1),
             Self::new(HerramientaDelPerfil::Gemini, 1),
             Self::new(HerramientaDelPerfil::Programator, 1),

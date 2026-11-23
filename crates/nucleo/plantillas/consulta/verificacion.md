@@ -19,6 +19,8 @@ En su forma equivalente para el lenguaje del proyecto:
 - Después rompe a propósito lo que vigila la prueba y comprueba que se pone en rojo.
 - En una reescritura o refactorización, compara la salida de antes y la de después. Fija antes lo no determinista: identificadores aleatorios, marcas de tiempo, orden de tablas hash.
 - Las listas de reglas son criterios de aceptación: se aplican ejecutando, no leyendo.
+- Todo rojo o verde cita la ruta del registro de su ejecución. Sin ruta, es «No comprobado».
+- La limpieza que hace un guion se comprueba ejecutándolo y mirando después lo que queda.
 
 ## 3. Barreras separadas
 
@@ -29,7 +31,8 @@ Las pruebas barrera viven en un archivo distinto del código que vigilan, para q
 1. Antes de aplicar una mutación, copia el archivo en `.gestor/respaldos/`.
 2. Anótala en el apartado de mutaciones vivas de `estado.md` mientras siga aplicada.
 3. Restáurala solo desde esa copia o con un parche inverso exacto. Con cambios sin confirmar de varios autores, `git checkout` está prohibido: destruye el trabajo ajeno.
-4. Bórrala de mutaciones vivas al restaurar.
+4. Una mutación solo vale si compruebas que está aplicada (diferencia del archivo o compilación nueva) antes de leer el rojo.
+5. Bórrala de mutaciones vivas al restaurar.
 
 Nadie corrige un rojo ajeno sin mirar antes las mutaciones vivas y la bandeja del dueño del archivo.
 
@@ -48,6 +51,15 @@ Nadie corrige un rojo ajeno sin mirar antes las mutaciones vivas y la bandeja de
 - Una cifra que no cuadra con el registro invalida la verificación entera.
 - Cinco de cinco no es el cien por cien: di sobre cuántos casos has medido.
 
-## 7. Al rechazar
+## 7. Qué consta en cada verificación
+
+- Por cada orden: la orden literal, la hora de inicio y de fin, el código de salida y las líneas de resumen copiadas tal cual.
+- Se ejecutan todos los criterios publicados, no solo las cuatro puertas. Lo que no se ejecuta se escribe «No comprobado».
+- Nada de «sin discrepancias», «exactamente» ni «estricto» si ninguna prueba lo compara. Ningún valor esperado se copia de la salida de otro agente.
+- Si el proyecto tiene varios manifiestos que no forman un workspace, las puertas se pasan entrando en la carpeta de cada uno: una orden en la raíz no los cubre.
+- Windows y Linux son las máquinas virtuales de pruebas, nunca el equipo del Director. Antes y después, comprueba que no ha cambiado nada en la carpeta de compilación del equipo (por ejemplo, `find <carpeta> -newermt "<hora de inicio>"` vacío).
+- Señales de alarma para quien acepta: cifras idénticas a las de otro agente, «en los N manifiestos» con una sola orden, registros sin nombre de máquina ni hora, y criterios publicados que no aparecen en el acta. Con una sola, se devuelve la verificación entera.
+
+## 8. Al rechazar
 
 Si rechazas por una trampa reproducible del proyecto o de su entorno, deja la regla preventiva como dice `.gestor/consulta/metodo.md`, apartado 3.

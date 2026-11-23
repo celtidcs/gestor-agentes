@@ -16,12 +16,10 @@ use comun::{guion_bash, guion_powershell, peticion, plan, textos, EntornoDeEnsay
 use lanzador::{ErrorDeLanzamiento, Herramienta, Sistema};
 
 /// Parte fija del principio del guion de PowerShell, tras el título.
-const TEMPORIZADOR: &str = "[Console]::Title = $t; \
-    $cb = [System.Threading.TimerCallback]{param($s) [Console]::Title = $s}; \
-    $tmr = New-Object System.Threading.Timer($cb, $t, 0, 1000); ";
+const TEMPORIZADOR: &str = "[Console]::Title = $t; Add-Type -TypeDefinition 'public static class GestorAgentesTitulo { static System.Threading.Timer reloj; public static void Fijar(string titulo) { reloj = new System.Threading.Timer(estado => System.Console.Title = titulo, null, 0, 1000); } public static void Parar() { if (reloj != null) { reloj.Dispose(); } } }'; [GestorAgentesTitulo]::Fijar($t); ";
 
 /// Parte fija del final del guion de PowerShell.
-const FINAL_POWERSHELL: &str = "; $tmr.Dispose(); [Console]::Title = $t";
+const FINAL_POWERSHELL: &str = "; [GestorAgentesTitulo]::Parar(); [Console]::Title = $t";
 
 #[test]
 fn windows_abre_powershell_con_el_guion_completo() {
@@ -34,8 +32,8 @@ fn windows_abre_powershell_con_el_guion_completo() {
 
     let esperado = format!(
         "$t = 'Claude 2 · Demo'; {TEMPORIZADOR}\
-         $env:GESTOR_AGENTE = 'Claude 2'; $env:CLAUDECODE = ''; \
-         $env:CLAUDE_CONFIG_DIR = 'C:\\Users\\usuario\\.claude2'; \
+         $env:GESTOR_AGENTE = 'Claude 2'; $env:GESTOR_PROYECTO = 'C:\\proyectos\\Demo'; \
+         $env:CLAUDECODE = ''; $env:CLAUDE_CONFIG_DIR = 'C:\\Users\\usuario\\.claude2'; \
          Set-Location -LiteralPath 'C:\\proyectos\\Demo'; \
          & 'C:\\herramientas\\claude.exe'{FINAL_POWERSHELL}"
     );
@@ -76,7 +74,8 @@ fn linux_abre_gnome_terminal_si_esta_con_el_guion_completo() {
         .con_archivo("/home/usuario/.local/bin/claude");
     let plan = plan(&p, Sistema::Linux, &entorno);
 
-    let guion = "export GESTOR_AGENTE='Claude 2'; export CLAUDECODE=''; \
+    let guion = "export GESTOR_AGENTE='Claude 2'; export GESTOR_PROYECTO='/proyectos/Demo'; \
+                 export CLAUDECODE=''; \
                  export CLAUDE_CONFIG_DIR='/home/usuario/.claude2'; \
                  cd '/proyectos/Demo'; '/home/usuario/.local/bin/claude'; exec bash";
     assert_eq!(plan.programa, PathBuf::from("gnome-terminal"));

@@ -129,6 +129,6 @@ Saludos a todo el mundo.
 
 Licencia
 
-Gestor Agentes es software libre, publicado con la licencia GPL-3.0 o posterior. El texto íntegro está en el archivo LICENSE.
+Gestor Agentes es software libre, publicado con la licencia GPL-3.0 o posterior. El texto íntegro está en el archivo LICENSE, y el paquete portable lo lleva como Licencia.txt en su carpeta documentacion.
 
 En corto: puedes usar el programa para lo que quieras, estudiar cómo funciona por dentro, modificarlo y repartirlo. La única condición es que si repartes una versión modificada, publiques también su código, con esta misma licencia.

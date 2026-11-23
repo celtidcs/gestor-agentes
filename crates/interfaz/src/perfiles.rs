@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use lanzador::{Herramienta, PeticionDeLanzamiento};
+use nucleo::actualizaciones::Version;
 use nucleo::agentes::IdentidadAgente;
 use nucleo::configuracion::{HerramientaDelPerfil, PerfilDeAgente};
 
@@ -13,10 +14,17 @@ use crate::textos;
 /// como «~/.claude» literal y el fallo se ve en lugar de acabar en una carpeta relativa.
 const SIN_CARPETA_PERSONAL: &str = "~";
 
-/// Primera instancia de Claude o Codex que necesita su propia carpeta de cuenta. La 1 no la
-/// exige: recién instalada la herramienta, su carpeta por defecto aún no existe y se crea al
-/// abrirla por primera vez.
-const PRIMERA_INSTANCIA_CON_CUENTA_PROPIA: u32 = 2;
+/// Carpeta de Claude Code dentro de la personal cuando el perfil no fija CLAUDE_CONFIG_DIR:
+/// «~/.claude», la misma que reconoce `nucleo::cuentas` como cuenta por defecto de Claude.
+pub const CARPETA_POR_DEFECTO_CLAUDE: &str = ".claude";
+
+/// Carpeta de Codex dentro de la personal cuando el perfil no fija CODEX_HOME: «~/.codex», la
+/// misma que reconoce `nucleo::cuentas` como cuenta por defecto de Codex.
+pub const CARPETA_POR_DEFECTO_CODEX: &str = ".codex";
+
+/// Carpeta de agy dentro de la personal: «~/.gemini», donde guarda sus proyectos
+/// (`lanzador::agy::CARPETA_DE_PROYECTOS`).
+pub const CARPETA_POR_DEFECTO_AGY: &str = ".gemini";
 
 /// Si un perfil se puede abrir en este equipo, y si no, por qué.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +35,85 @@ pub enum Disponibilidad {
     SinEjecutable,
     /// El programa está, pero falta la carpeta de la cuenta del perfil, como ~/.claude2.
     SinCuenta(PathBuf),
+}
+
+/// Carpeta donde vive un agente (su configuración y su cuenta) y si existe en el equipo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CarpetaDelAgente {
+    ruta: PathBuf,
+    existe: bool,
+    /// Versión del programa que se abre, si se conoce (solo Programator en Windows, F7).
+    version: Option<Version>,
+}
+
+impl CarpetaDelAgente {
+    /// Carpeta `ruta`, que existe o no según `existe`.
+    #[must_use]
+    pub const fn new(ruta: PathBuf, existe: bool) -> Self {
+        Self {
+            ruta,
+            existe,
+            version: None,
+        }
+    }
+
+    /// La misma carpeta con la versión del programa.
+    #[must_use]
+    pub const fn con_version(mut self, version: Option<Version>) -> Self {
+        self.version = version;
+        self
+    }
+
+    /// Versión del programa, si se conoce.
+    #[must_use]
+    pub const fn version(&self) -> Option<Version> {
+        self.version
+    }
+
+    /// Ruta de la carpeta.
+    #[must_use]
+    pub fn ruta(&self) -> &Path {
+        &self.ruta
+    }
+
+    /// Indica si la carpeta existe.
+    #[must_use]
+    pub const fn existe(&self) -> bool {
+        self.existe
+    }
+}
+
+/// Estado de un agente en la pestaña Agentes, que da el color y la palabra de su celda.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EstadoDelAgente {
+    /// Se ha encontrado el programa y, si la exige, su cuenta: se puede abrir.
+    Localizado,
+    /// El programa está, pero falta la carpeta de su cuenta.
+    FaltaLaCuenta,
+    /// No se encuentra el programa.
+    NoEncontrado,
+    /// Lo mostrado no vale todavía: la búsqueda está en curso o la ruta editada no se ha
+    /// guardado ni buscado.
+    SinComprobar,
+}
+
+/// Estado de un agente a partir de su disponibilidad (nada si aún no se ha detectado), de si su
+/// ruta editada difiere de la guardada y de si hay una búsqueda de agentes en curso.
+#[must_use]
+pub const fn estado_del_agente(
+    disponibilidad: Option<&Disponibilidad>,
+    ruta_cambiada: bool,
+    buscando: bool,
+) -> EstadoDelAgente {
+    if ruta_cambiada || buscando {
+        return EstadoDelAgente::SinComprobar;
+    }
+    match disponibilidad {
+        None => EstadoDelAgente::SinComprobar,
+        Some(Disponibilidad::Disponible(_)) => EstadoDelAgente::Localizado,
+        Some(Disponibilidad::SinCuenta(_)) => EstadoDelAgente::FaltaLaCuenta,
+        Some(Disponibilidad::SinEjecutable) => EstadoDelAgente::NoEncontrado,
+    }
 }
 
 impl Disponibilidad {
@@ -100,8 +187,37 @@ pub fn ejecutable_fijado(
     perfil.ejecutable_expandido(&personal_o_tilde(carpeta_personal))
 }
 
-/// Carpeta de cuenta que el perfil necesita que exista, con «~» sustituida: la de Claude o Codex
-/// desde la instancia 2, si el perfil fija una. Nada si el perfil no la exige.
+/// Carpeta donde vive el agente del perfil, con «~» sustituida. Claude y Codex: la que fija el
+/// perfil (CLAUDE_CONFIG_DIR o CODEX_HOME) o, si no fija ninguna, la que la herramienta usa por
+/// defecto. agy: ~/.gemini. Programator: la carpeta de su ejecutable fijado; nada sin él.
+#[must_use]
+pub fn carpeta_del_agente(
+    perfil: &PerfilDeAgente,
+    carpeta_personal: Option<&Path>,
+) -> Option<PathBuf> {
+    let personal = personal_o_tilde(carpeta_personal);
+    let por_defecto = |carpeta: &str| personal.join(carpeta);
+    match perfil.tipo() {
+        HerramientaDelPerfil::Claude => Some(
+            perfil
+                .directorio_configuracion_expandido(&personal)
+                .unwrap_or_else(|| por_defecto(CARPETA_POR_DEFECTO_CLAUDE)),
+        ),
+        HerramientaDelPerfil::Codex => Some(
+            perfil
+                .directorio_configuracion_expandido(&personal)
+                .unwrap_or_else(|| por_defecto(CARPETA_POR_DEFECTO_CODEX)),
+        ),
+        HerramientaDelPerfil::Gemini => Some(por_defecto(CARPETA_POR_DEFECTO_AGY)),
+        HerramientaDelPerfil::Programator => perfil
+            .ejecutable_expandido(&personal)
+            .and_then(|ejecutable| ejecutable.parent().map(Path::to_path_buf)),
+    }
+}
+
+/// Carpeta de cuenta que el perfil necesita que exista, con «~» sustituida: la de Claude o
+/// Codex en todas sus instancias, también la 1 (ver [`carpeta_del_agente`]). Nada para agy y
+/// Programator, que no la exigen.
 #[must_use]
 pub fn carpeta_de_cuenta_exigida(
     perfil: &PerfilDeAgente,
@@ -111,10 +227,10 @@ pub fn carpeta_de_cuenta_exigida(
         perfil.tipo(),
         HerramientaDelPerfil::Claude | HerramientaDelPerfil::Codex
     );
-    if !tiene_cuentas || perfil.instancia() < PRIMERA_INSTANCIA_CON_CUENTA_PROPIA {
+    if !tiene_cuentas {
         return None;
     }
-    perfil.directorio_configuracion_expandido(&personal_o_tilde(carpeta_personal))
+    carpeta_del_agente(perfil, carpeta_personal)
 }
 
 /// Disponibilidad de un perfil a partir de lo que se ha encontrado: el ejecutable detectado (ver

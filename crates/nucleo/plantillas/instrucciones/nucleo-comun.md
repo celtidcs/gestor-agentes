@@ -1,6 +1,6 @@
 # Núcleo común
 
-Reglas obligatorias para todos los agentes. Lo que solo hace falta en momentos concretos está en `.gestor/consulta/`: lee cada documento entero cuando llegue su momento.
+Reglas obligatorias para todos los agentes. Cada documento de `.gestor/consulta/` se lee entero cuando llega su momento:
 
 | Cuándo | Lee entero |
 |---|---|
@@ -9,8 +9,9 @@ Reglas obligatorias para todos los agentes. Lo que solo hace falta en momentos c
 | Antes de verificar, aplicar una mutación o entregar | `.gestor/consulta/verificacion.md` |
 | Antes de encargarle algo a Programator | `.gestor/consulta/programator.md` |
 | Al consolidar el bloque pendiente, al tocar `control.md`, funciones, documentación o una publicación | `.gestor/consulta/metodo.md` |
+| Antes de montar algo para una herramienta o cuando una falle | `.gestor/consulta/aprendizaje-comun.md` |
 
-Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consolidar (entre marcas `GESTOR:LEGADO`), el primer agente que arranque lo consolida antes de cualquier otro trabajo, con el procedimiento de `.gestor/consulta/metodo.md`. Al iniciar haces entero el arranque obligatorio de la cabecera, en el que se consolida el bloque pendiente si lo hay.
+Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consolidar (`GESTOR:LEGADO`), lo consolida el primer agente que arranque: el paso 5 del arranque obligatorio, en el que se consolida el bloque pendiente si lo hay.
 
 ## 1. Verificación y seguridad (norma suprema)
 
@@ -33,12 +34,13 @@ Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consoli
 ## 3. Canal y coordinación
 
 - Toda la comunicación entre agentes y con el Director pasa por `.gestor/canal/`.
-- `estado.md` solo recoge hechos comprobables y vigentes, con fecha, hora del sistema y quién los anota: papeles, rama, commit base, versión, reparto de funciones, autoexclusiones, reservas, mutaciones vivas y prohibiciones.
+- `estado.md` solo recoge hechos comprobables y vigentes, con fecha, hora del sistema y quién los anota: papeles, rama, versión, funciones, autoexclusiones, reservas, mutaciones vivas y prohibiciones.
 - Tu bandeja solo la escribes tú. No edites nunca el archivo de otro agente. Lo que un agente no ha escrito en su bandeja, no lo ha dicho.
 - Cada intervención empieza con `LATIDO: <fecha y hora>` tomadas del sistema (`date` o `Get-Date`), nunca a ojo.
-- Un encargo solo existe si dice `Para <agente>`.
-- Escribe en el canal solo con un resultado, una pregunta o un bloqueo: sin acuses ni avisos de arranque. Cita rutas, no copies contenido. Copia al Director solo si decide él. No repitas en la terminal lo del canal.
-- Mantén tu vigilante (paso 8 del arranque) mientras trabajes y atiende en cuanto llegue un mensaje para ti. Un aviso sin nada para ti no se comenta: rearma y espera.
+- Un encargo solo existe si la línea dice `Para <identidad>`, con el número; si son varios destinatarios, `Para A y B`. Ceder un turno o una VM también es un encargo.
+- Escribe en el canal solo con un resultado, una pregunta, un bloqueo o un `RECIBIDO`: sin otros acuses ni avisos de arranque. Cita rutas, no copies contenido. Copia al Director solo si decide él. No repitas en la terminal lo del canal.
+- Al leer un encargo para ti, anota en tu bandeja `RECIBIDO <hora del sistema>: <encargo>` con tu `LATIDO`, como prueba de vida. Esas líneas no se borran al podar: van a tu histórico.
+- Mantén tu vigilante (paso 8 del arranque) y atiende cada encargo al llegar. Un aviso sin nada para ti no se comenta: rearma y espera.
 - Poda tu bandeja a unas ochenta líneas vivas; lo resuelto va a tu histórico, en tu carpeta.
 - Reservas: antes de modificar un archivo del repositorio, anótalo en `## Reservas activas` de `estado.md` (`- Claude 2, 2026-11-13 10:30: ruta, carpeta/ — motivo`) y bórralo al terminar.
 - Diario: escribe el plan en tu `tarea-en-curso.md` antes de ejecutar y cada hito al alcanzarlo, para que otro pueda retomarlo en el punto exacto. Lo cerrado va a `historico-diario.md`.
@@ -47,7 +49,7 @@ Si .gestor/instrucciones-del-proyecto.md contiene un bloque pendiente de consoli
 
 - El Director decide el papel de cada agente: Jefe de proyecto (solo uno) o ayudante. Se pregunta al arrancar si `estado.md` no lo recoge.
 - El Jefe reparte el trabajo y habla con el Director; los ayudantes hablan con el Jefe.
-- Ninguna función (programar, verificar, depurar, investigar, documentar, entregar) es fija. El Jefe la propone en el canal, se acuerda y él la anota en `estado.md`. Quien delega verifica el resultado.
+- Ninguna función (programar, verificar, documentar...) es fija. El Jefe la propone en el canal, se acuerda y él la anota en `estado.md`. Quien delega verifica el resultado.
 - Las decisiones técnicas se acuerdan en el canal, con igual autoridad técnica. Si hay desacuerdo, decide el Director, previa consulta del Jefe.
 - Si el Jefe no está (latido desfasado), sigue con lo asignado y déjale escrito lo que necesites.
 - Quien recibe una orden directa del Director la traslada en el momento al canal: palabras literales y, aparte, su interpretación. Las que llegan por el canal no se recopian. Las permanentes se añaden con su fecha a `.gestor/ordenes-del-director.md` (solo se añade texto). Lo decidido no se vuelve a preguntar.
@@ -61,7 +63,7 @@ Antes de tocar código, lee `.gestor/consulta/codigo.md`. Tres reglas no se nego
 
 ## 6. Documentación
 
-- Lo que leen los agentes (canal, diarios, actas, archivos de `.gestor/`) se escribe para un agente: frases cortas, pasos, listas, rutas y órdenes exactas, con markdown cuando ayude.
+- Lo que leen los agentes (todo `.gestor/`) se escribe para un agente: frases cortas, listas, rutas y órdenes exactas.
 - Lo que lee el usuario (documentación del proyecto y mensajes de commit) va en prosa natural, salvo que `.gestor/instrucciones-del-proyecto.md` diga otra cosa.
 - La documentación cambia con el código. Al terminar la sesión, pon al día el historial de cambios y todo documento afectado.
 

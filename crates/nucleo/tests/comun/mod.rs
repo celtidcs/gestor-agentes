@@ -120,11 +120,23 @@ pub fn reloj_fijo() -> RelojFijo {
 #[derive(Default)]
 pub struct ConfiguracionFalsa {
     pub instrucciones_antiguas: RefCell<Option<String>>,
+    /// Ejecutable del vigilante que se copia a los proyectos; sin él no se copia nada.
+    pub vigilante: RefCell<Option<PathBuf>>,
+    /// Carpeta de datos de la aplicación; sin ella no se recogen candidatas.
+    pub datos: RefCell<Option<PathBuf>>,
 }
 
 impl ConfiguracionDeInstrucciones for ConfiguracionFalsa {
     fn leer_instrucciones_antiguas(&self) -> Option<String> {
         self.instrucciones_antiguas.borrow().clone()
+    }
+
+    fn ejecutable_del_vigilante(&self) -> Option<PathBuf> {
+        self.vigilante.borrow().clone()
+    }
+
+    fn carpeta_de_datos(&self) -> Option<PathBuf> {
+        self.datos.borrow().clone()
     }
 }
 

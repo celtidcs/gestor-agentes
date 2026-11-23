@@ -10,7 +10,7 @@ use lanzador::{
     EntornoDelSistema, EntornoReal, ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento,
     PlanDeLanzamiento, Sistema,
 };
-use nucleo::actualizaciones;
+use nucleo::actualizaciones::{self, Version};
 use nucleo::agentes::IdentidadAgente;
 use nucleo::ajustes::Ajustes;
 use nucleo::configuracion::{
@@ -24,8 +24,12 @@ use nucleo::proyecto::inicializador::{
     self, ConfiguracionDeInstrucciones, InicializadorDeProyecto,
 };
 use nucleo::proyecto::localizador::LocalizadorDeInstrucciones;
-use nucleo::proyecto::momento::RelojDelSistema;
+use nucleo::proyecto::momento::{Reloj, RelojDelSistema};
+use nucleo::proyecto::papeles::{self, Papel};
 use nucleo::proyecto::revision_del_canal;
+use nucleo::proyecto::vigilancia;
+use vigilante::opciones::ProcesoMarcado;
+use vigilante::procesos::{self, ProcesosDelSistema};
 
 use crate::actualizaciones::ConsultorDePublicaciones;
 use crate::aplicacion::Servicios;
@@ -110,11 +114,57 @@ impl Servicios for ServiciosReales {
     ) -> Option<(revision_del_canal::ResumenDelEquipo, chrono::NaiveDateTime)> {
         let estado = fs::read_to_string(carpeta.join(".gestor/canal/estado.md")).ok()?;
         let bandejas = inicializador::leer_bandejas(carpeta).unwrap_or_default();
-        Some((
-            revision_del_canal::resumir(&estado, &bandejas),
-            Local::now().naive_local(),
-        ))
+        let mut resumen = revision_del_canal::resumir(&estado, &bandejas);
+        resumen.vigilancia = vigilancia_del_equipo(carpeta, &bandejas);
+        Some((resumen, Local::now().naive_local()))
     }
+}
+
+/// Vigilancia de cada agente con bandeja: su vivo.json, comprobado contra los procesos del sistema,
+/// y los encargos de su avisos.log posteriores a su último acuse.
+fn vigilancia_del_equipo(
+    carpeta: &Path,
+    bandejas: &[revision_del_canal::Bandeja],
+) -> Vec<vigilancia::VigilanciaDeAgente> {
+    let mut procesos = ProcesosDelSistema::new();
+    bandejas
+        .iter()
+        .filter_map(|bandeja| {
+            let identificador = bandeja.nombre.strip_suffix(".md")?.to_owned();
+            let recuerdo = carpeta
+                .join(".gestor")
+                .join(&identificador)
+                .join(vigilancia::CARPETA_DEL_VIGILANTE);
+            let vigilante = fs::read_to_string(recuerdo.join(vigilancia::ARCHIVO_VIVO))
+                .ok()
+                .and_then(|texto| vigilancia::leer_vivo(&texto))
+                .map(|anotado| {
+                    let marcado = ProcesoMarcado {
+                        pid: anotado.pid,
+                        arranque: anotado.arranque,
+                    };
+                    if procesos::vivo(&mut procesos, marcado) {
+                        vigilancia::EstadoDelVigilante::Vigilando
+                    } else {
+                        vigilancia::EstadoDelVigilante::Caido
+                    }
+                });
+            let desde = vigilancia::ultimo_acuse(&bandeja.texto)
+                .and_then(|hora| hora.and_local_timezone(Local).earliest())
+                .map(|hora| hora.timestamp());
+            let encargos_sin_acuse =
+                fs::read_to_string(recuerdo.join(vigilancia::ARCHIVO_DE_AVISOS))
+                    .map(|avisos| vigilancia::encargos_sin_acuse(&avisos, desde))
+                    .unwrap_or(0);
+            (vigilante.is_some() || encargos_sin_acuse > 0).then_some(
+                vigilancia::VigilanciaDeAgente {
+                    identificador,
+                    vigilante,
+                    encargos_sin_acuse,
+                },
+            )
+        })
+        .collect()
 }
 
 /// Motor real: selector de carpetas del sistema, inicializador del núcleo y lanzador.
@@ -139,12 +189,26 @@ impl ConfiguracionDeInstrucciones for MotorReal {
         self.configuracion.leer_instrucciones_antiguas()
     }
 
+    fn carpeta_de_datos(&self) -> Option<PathBuf> {
+        self.configuracion.carpeta_de_datos()
+    }
+
     fn limite_de_latido_horas(&self) -> u64 {
         self.ajustes.limite_de_latido_horas()
     }
 
     fn limite_de_bandeja(&self) -> u64 {
         self.ajustes.limite_de_bandeja()
+    }
+
+    /// El gestor-vigilante que va junto al ejecutable de Gestor Agentes, en su paquete.
+    fn ejecutable_del_vigilante(&self) -> Option<PathBuf> {
+        let propio = std::env::current_exe().ok()?;
+        Some(
+            propio
+                .parent()?
+                .join(nucleo::proyecto::vigilante::nombre_del_ejecutable()),
+        )
     }
 }
 
@@ -161,6 +225,18 @@ impl Motor for MotorReal {
             .pick_file()
     }
 
+    fn elegir_carpeta_de_cuenta(&self) -> Option<PathBuf> {
+        rfd::FileDialog::new()
+            .set_title(textos::TITULO_SELECTOR_CUENTA)
+            .pick_folder()
+    }
+
+    fn version_del_ejecutable(&self, ruta: &Path) -> Option<Version> {
+        fs::read(ruta)
+            .ok()
+            .and_then(|bytes| nucleo::version_de_programa::version_en_recurso(&bytes))
+    }
+
     fn preparar(&self, raiz: &Path, identidad: Option<IdentidadAgente>) -> InformeDeInicializacion {
         let ejecutor = EjecutorDelSistema::con_tiempo_maximo(self.ajustes.tiempo_maximo_git());
         InicializadorDeProyecto::new(
@@ -174,6 +250,10 @@ impl Motor for MotorReal {
 
     fn carpeta_personal(&self) -> Option<PathBuf> {
         EntornoReal.carpeta_personal()
+    }
+
+    fn anotar_papel(&self, raiz: &Path, identidad: &str, papel: Papel) -> std::io::Result<bool> {
+        papeles::anotar_en_disco(raiz, identidad, papel, RelojDelSistema.ahora())
     }
 
     fn planificar(

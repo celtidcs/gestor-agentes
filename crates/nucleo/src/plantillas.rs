@@ -40,8 +40,6 @@ const CONSULTA_METODO: &[u8] = include_bytes!("../plantillas/consulta/metodo.md"
 const CONSULTA_VERIFICACION: &[u8] = include_bytes!("../plantillas/consulta/verificacion.md");
 const CONSULTA_PROGRAMATOR: &[u8] = include_bytes!("../plantillas/consulta/programator.md");
 const MENSAJE_INICIAL: &[u8] = include_bytes!("../plantillas/instrucciones/mensaje-inicial.md");
-const VIGILANTE_BASH: &[u8] = include_bytes!("../plantillas/vigilante/vigilar-canal.sh");
-const VIGILANTE_POWERSHELL: &[u8] = include_bytes!("../plantillas/vigilante/vigilar-canal.ps1");
 const INSTRUCCIONES_DEL_PROYECTO: &[u8] =
     include_bytes!("../plantillas/gestor/instrucciones-del-proyecto.md");
 const ESTADO: &[u8] = include_bytes!("../plantillas/gestor/estado.md");
@@ -157,42 +155,6 @@ impl DocumentoDeConsulta {
             Self::Metodo => CONSULTA_METODO,
             Self::Verificacion => CONSULTA_VERIFICACION,
             Self::Programator => CONSULTA_PROGRAMATOR,
-        })
-    }
-}
-
-/// Guion del vigilante del canal que Gestor Agentes escribe en .gestor/vigilante/. Cada agente
-/// lo arma al arrancar, como dice la cabecera de AGENTS.md: en modo continuo con el Monitor de
-/// Claude Code, o en una sola pasada al terminar cada paso en las herramientas sin aviso
-/// automático.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GuionDelVigilante {
-    /// Versión de bash, para Linux y para el bash de Git en Windows.
-    Bash,
-    /// Versión de Windows PowerShell 5.1. Solo lleva ASCII, porque PowerShell 5.1 lee como ANSI
-    /// un .ps1 sin marca BOM.
-    PowerShell,
-}
-
-impl GuionDelVigilante {
-    /// Los dos guiones.
-    pub const TODOS: [Self; 2] = [Self::Bash, Self::PowerShell];
-
-    /// Ruta relativa al proyecto, con barras normales.
-    #[must_use]
-    pub const fn ruta_relativa(self) -> &'static str {
-        match self {
-            Self::Bash => ".gestor/vigilante/vigilar-canal.sh",
-            Self::PowerShell => ".gestor/vigilante/vigilar-canal.ps1",
-        }
-    }
-
-    /// Texto vigente del guion.
-    #[must_use]
-    pub fn texto(self) -> String {
-        leer(match self {
-            Self::Bash => VIGILANTE_BASH,
-            Self::PowerShell => VIGILANTE_POWERSHELL,
         })
     }
 }

@@ -24,7 +24,15 @@ pub struct EntornoDeEnsayo {
     pub path: Vec<PathBuf>,
     pub personal: Option<PathBuf>,
     pub datos_locales: Option<PathBuf>,
+    /// Sin proyecto de agy para ninguna carpeta. Por defecto, toda carpeta tiene el proyecto
+    /// [`PROYECTO_AGY`].
+    pub sin_proyecto_agy: bool,
+    /// Los proyectos de agy no se pueden leer. Manda sobre `sin_proyecto_agy`.
+    pub proyectos_agy_ilegibles: bool,
 }
+
+/// Id del proyecto de agy que da el doble para cualquier carpeta.
+pub const PROYECTO_AGY: &str = "proyecto-demo";
 
 impl EntornoDeEnsayo {
     pub fn con_archivo(mut self, ruta: impl Into<PathBuf>) -> Self {
@@ -50,6 +58,16 @@ impl EntornoDelSistema for EntornoDeEnsayo {
                     .find(|c| self.archivos.contains(c))
             }
         })
+    }
+
+    fn proyecto_de_agy(&self, _carpeta: &Path) -> lanzador::agy::ProyectoDeAgy {
+        if self.proyectos_agy_ilegibles {
+            lanzador::agy::ProyectoDeAgy::Ilegible
+        } else if self.sin_proyecto_agy {
+            lanzador::agy::ProyectoDeAgy::Falta
+        } else {
+            lanzador::agy::ProyectoDeAgy::Encontrado(PROYECTO_AGY.to_owned())
+        }
     }
 
     fn carpeta_personal(&self) -> Option<PathBuf> {

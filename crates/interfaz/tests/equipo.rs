@@ -15,6 +15,7 @@ use gestor_agentes::trabajos::ResultadoDeTrabajo;
 use nucleo::configuracion::{ErrorDeConfiguracion, PerfilDeAgente, ProyectoRegistrado};
 use nucleo::proyecto::estado::EstadoDelProyecto;
 use nucleo::proyecto::revision_del_canal::{Latido, ResumenDelEquipo};
+use nucleo::proyecto::vigilancia::{EstadoDelVigilante, VigilanciaDeAgente};
 
 const CON_CANAL: &str = "/proyectos/con-canal";
 const SIN_CANAL: &str = "/proyectos/sin-canal";
@@ -39,6 +40,7 @@ fn resumen() -> ResumenDelEquipo {
         reservas: 2,
         mutaciones_vivas: true,
         autoexclusiones: false,
+        vigilancia: Vec::new(),
     }
 }
 
@@ -102,6 +104,27 @@ fn la_linea_dice_jefe_latidos_reservas_y_alertas() {
     assert_eq!(
         textos::linea_del_equipo(&resumen(), hora("2026-11-13 12:00:00")),
         "Equipo · Jefe: Claude 2 · claude2 hace 5 min · gemini hace 3 h · 2 reservas · MUTACIONES VIVAS"
+    );
+}
+
+#[test]
+fn la_linea_dice_si_cada_agente_vigila_y_sus_encargos_sin_acuse() {
+    let mut con_vigilancia = resumen();
+    con_vigilancia.vigilancia = vec![
+        VigilanciaDeAgente {
+            identificador: "claude2".to_owned(),
+            vigilante: Some(EstadoDelVigilante::Vigilando),
+            encargos_sin_acuse: 0,
+        },
+        VigilanciaDeAgente {
+            identificador: "gemini".to_owned(),
+            vigilante: Some(EstadoDelVigilante::Caido),
+            encargos_sin_acuse: 2,
+        },
+    ];
+    assert_eq!(
+        textos::linea_del_equipo(&con_vigilancia, hora("2026-11-13 12:00:00")),
+        "Equipo · Jefe: Claude 2 · claude2 hace 5 min (vigila) · gemini hace 3 h (VIGILANTE CAÍDO, 2 encargos sin RECIBIDO) · 2 reservas · MUTACIONES VIVAS"
     );
 }
 

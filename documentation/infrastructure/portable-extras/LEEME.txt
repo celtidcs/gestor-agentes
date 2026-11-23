@@ -43,6 +43,8 @@ Qué hay en esta carpeta
 
 El programa es gestor-agentes.exe en Windows, o gestor-agentes en Linux.
 
+A su lado está gestor-vigilante.exe en Windows, o gestor-vigilante en Linux, el vigilante del canal que el programa copia a cada proyecto para avisar a los agentes de los encargos que les hacen los demás. No lo abras tú, pero déjalo siempre junto al programa.
+
 La carpeta datos guarda tu configuración: la lista de proyectos, los perfiles de agente y los ajustes de funcionamiento. La crea y la rellena el programa. No la borres si quieres conservarla.
 
 La carpeta documentacion tiene tres documentos. Manual de uso explica todo el programa paso a paso y es el que conviene leer primero. Resolucion de problemas recoge lo que suele salir mal y cómo arreglarlo. Referencia de funcionalidades describe con detalle técnico todo lo que hace el programa.
@@ -57,7 +59,7 @@ Si prefieres empezar de cero en el otro ordenador, copia la carpeta sin el conte
 
 Cuando haya una versión nueva
 
-Al arrancar, el programa mira en GitHub si hay una versión más nueva y, si la hay, te dice cuál es y dónde descargarla. No descarga nada por su cuenta. Para actualizar, sustituye el programa y la carpeta documentacion por los del paquete nuevo y conserva tu carpeta datos.
+Al arrancar, el programa mira en GitHub si hay una versión más nueva y, si la hay, te dice cuál es y dónde descargarla. No descarga nada por su cuenta. Para actualizar, sustituye los dos programas, gestor-agentes y gestor-vigilante, y la carpeta documentacion por los del paquete nuevo y conserva tu carpeta datos.
 
 
 Si algo no funciona
@@ -68,3 +70,8 @@ Abre el documento Resolucion de problemas, en la carpeta documentacion. Ahí est
 Desinstalar
 
 No hay nada que desinstalar. Borra esta carpeta y listo; con ella se va tu configuración. Tus proyectos no se tocan.
+
+
+Licencia y código fuente
+
+Gestor Agentes es software libre, con licencia GPL-3.0-or-later. El texto completo está en Licencia.txt, en la carpeta documentacion. El código fuente está en https://github.com/celtidcs/gestor-agentes.

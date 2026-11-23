@@ -9,13 +9,20 @@
 //! 3. Archivo de los archivos del sistema anterior (canal antiguo de Gemini, GEMINI.md, memoria
 //!    compartida y reglas de agy en .agents/).
 //! 4. Estructura de .gestor/ (canal, bandejas, diarios, actas, registros y órdenes).
+//!    Además, se añaden a estado.md los apartados obligatorios que le falten ([`papeles`]).
 //! 5. Archivo propio del proyecto: se crea si falta, con lo recogido en el paso 2 y la lista de
 //!    lo archivado en el paso 3. Si ya existe no se toca nunca.
+//!    Seguimiento del bloque de legado: cuando un agente lo ha consolidado, se borran las carpetas
+//!    del archivo que dejó la aplicación.
 //! 6. Archivos que la aplicación escribe enteros: AGENTS.md, CLAUDE.md y los documentos de
 //!    consulta, con copia previa de lo que no hubiera escrito ella.
+//!    Vigilante del canal: copia del ejecutable gestor-vigilante a .gestor/vigilante/ y
+//!    retirada de los guiones y referencias del vigilante anterior ([`vigilante`]).
 //! 7. Permisos del arranque en el archivo de permisos del proyecto de cada herramienta
 //!    ([`permisos`]), sin quitar nada de lo que ya tenga.
-//! 8. Aviso de las bandejas del canal que han crecido demasiado y de lo que no cuadra en el estado
+//! 8. Aviso del código del proyecto que cita AGENTS.md, CLAUDE.md o GEMINI.md
+//!    ([`citas_de_reglas`]).
+//!    Aviso de las bandejas del canal que han crecido demasiado y de lo que no cuadra en el estado
 //!    del canal (apartados, mutaciones vivas y reservas), con [`revision_del_canal`].
 //!    Además, aviso de los diarios y del estado del canal que pasan del mismo límite.
 //! 9. Registro de huellas de lo escrito.
@@ -28,23 +35,28 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::archivos;
 use super::avisos_de_preparacion;
 use super::catalogo::{self, ArchivoGestionado};
+use super::citas_de_reglas;
 use super::estructura;
 use super::informe::{InformeDeInicializacion, TipoDeCambio};
 use super::localizador::FuenteDeEntorno;
 use super::momento::{Momento, Reloj};
+use super::papeles;
 use super::permisos::{self, Fusion};
 use super::registro_de_huellas::{self, RegistroDeHuellas};
 use super::revision_del_canal;
 use super::sistema_anterior;
+use super::vigilante;
 use crate::agentes::{IdentidadAgente, TipoAgente, CARPETA_CANAL, CARPETA_GESTOR};
+use crate::aprendizaje;
 use crate::git::{self, ServicioGit};
 use crate::instrucciones::formato::FormatoDeTexto;
 use crate::instrucciones::huella;
+use crate::instrucciones::marcas;
 use crate::instrucciones::migracion::{self, Archivado, ArchivoAnterior, TextoPropio};
 use crate::instrucciones::sustitucion::{self, Sustitucion};
 use crate::plantillas;
@@ -95,6 +107,18 @@ pub trait ConfiguracionDeInstrucciones {
     /// [`crate::ajustes::LIMITE_DE_LATIDO_POR_DEFECTO`].
     fn limite_de_latido_horas(&self) -> u64 {
         crate::ajustes::LIMITE_DE_LATIDO_POR_DEFECTO
+    }
+
+    /// Ejecutable gestor-vigilante que se copia a cada proyecto ([`vigilante`]). Sin él no se
+    /// copia nada; la aplicación da el que lleva a su lado, y avisa si no está.
+    fn ejecutable_del_vigilante(&self) -> Option<PathBuf> {
+        None
+    }
+
+    /// Carpeta de datos de la aplicación, donde se juntan las reglas candidatas a aprendizaje común
+    /// de todos los proyectos ([`crate::aprendizaje`]). Sin ella no se recogen.
+    fn carpeta_de_datos(&self) -> Option<PathBuf> {
+        None
     }
 }
 
@@ -170,6 +194,9 @@ impl<'a> InicializadorDeProyecto<'a> {
         paso(&mut informe, ".gestor/", |informe| {
             estructura::asegurar(raiz, &identidades, informe)
         });
+        paso(&mut informe, ARCHIVO_DE_ESTADO_DEL_CANAL, |informe| {
+            papeles::completar_en_disco(raiz, informe)
+        });
 
         if falta_el_propio {
             paso(
@@ -180,12 +207,38 @@ impl<'a> InicializadorDeProyecto<'a> {
         } else if !archivados.is_empty() {
             informe.anotar_aviso(aviso_de_archivados_sin_propio(&archivados));
         }
+        paso(
+            &mut informe,
+            sistema_anterior::CARPETA_ARCHIVO_SISTEMA_ANTERIOR,
+            |informe| seguir_el_legado(raiz, &mut registro, archivados.is_empty(), informe),
+        );
+
+        if let Some(datos) = self.configuracion.carpeta_de_datos() {
+            paso(
+                &mut informe,
+                aprendizaje::ARCHIVO_DE_CANDIDATAS,
+                |informe| recoger_candidatas(raiz, &datos, momento, informe),
+            );
+        }
 
         let entorno = self.fuente_de_entorno.buscar(raiz);
         for archivo in catalogo::archivos_gestionados(entorno.as_ref()) {
             paso(&mut informe, archivo.ruta_relativa, |informe| {
                 mantener_entero(raiz, &archivo, &mut registro, momento, informe)
             });
+        }
+
+        if let Some(origen) = self.configuracion.ejecutable_del_vigilante() {
+            paso(&mut informe, vigilante::CARPETA_DEL_VIGILANTE, |informe| {
+                vigilante::instalar(raiz, &origen, informe)
+            });
+        }
+        let retirados = con_valor(&mut informe, vigilante::CARPETA_DEL_VIGILANTE, |informe| {
+            vigilante::retirar_lo_anterior(raiz, informe)
+        })
+        .unwrap_or_default();
+        for retirado in &retirados {
+            registro.olvidar(retirado);
         }
 
         paso(&mut informe, permisos::ARCHIVO_DE_CLAUDE, |informe| {
@@ -195,6 +248,14 @@ impl<'a> InicializadorDeProyecto<'a> {
                 &permisos::REGLAS_DE_CLAUDE,
                 informe,
             )
+        });
+
+        paso(&mut informe, ".", |informe| {
+            let citas = citas_de_reglas::buscar(raiz)?;
+            if !citas.is_empty() {
+                informe.anotar_aviso(textos::codigo_que_cita_las_reglas(&citas));
+            }
+            Ok(())
         });
 
         paso(&mut informe, CARPETA_CANAL, |informe| {
@@ -291,6 +352,94 @@ fn crear_propio(
         TipoDeCambio::Creado,
         detalle,
     );
+    Ok(())
+}
+
+/// Añade a candidatas-comunes.md, en la carpeta de datos, las reglas aprendidas del proyecto
+/// marcadas como candidatas a común que todavía no estén.
+fn recoger_candidatas(
+    raiz: &Path,
+    datos: &Path,
+    momento: Momento,
+    informe: &mut InformeDeInicializacion,
+) -> io::Result<()> {
+    let Some((propio, _)) = archivos::leer(&archivos::ruta(
+        raiz,
+        catalogo::RUTA_INSTRUCCIONES_DEL_PROYECTO,
+    ))?
+    else {
+        return Ok(());
+    };
+    let candidatas = aprendizaje::candidatas(&propio);
+    if candidatas.is_empty() {
+        return Ok(());
+    }
+    let destino = datos.join(aprendizaje::ARCHIVO_DE_CANDIDATAS);
+    let actual = archivos::leer(&destino)?;
+    let proyecto = raiz
+        .file_name()
+        .map_or_else(|| raiz.to_string_lossy(), |nombre| nombre.to_string_lossy());
+    if let Some(texto) = aprendizaje::anadir_candidatas(
+        actual.as_ref().map(|(texto, _)| texto.as_str()),
+        &candidatas,
+        &proyecto,
+        &momento.fecha_iso(),
+    ) {
+        let formato = actual.map(|(_, formato)| formato).unwrap_or_default();
+        archivos::escribir(&destino, &texto, formato)?;
+        informe.anotar_aviso(textos::candidatas_recogidas(&destino.to_string_lossy()));
+    }
+    Ok(())
+}
+
+/// Clave del registro de huellas que dice que la aplicación dejó un bloque de legado pendiente de
+/// consolidar, con archivos llevados a .gestor/archivo/.
+const CLAVE_LEGADO_PENDIENTE: &str = ".gestor/archivo/ (legado pendiente)";
+
+/// Carpetas del archivo que deja la aplicación y que se borran al consolidar el legado (apartado 0
+/// de consulta/metodo.md).
+const CARPETAS_DEL_LEGADO: [&str; 2] = [
+    sistema_anterior::CARPETA_ARCHIVO_SISTEMA_ANTERIOR,
+    sistema_anterior::CARPETA_ARCHIVO_GEMINI,
+];
+
+/// Lleva la cuenta del bloque de legado. Mientras el archivo propio tenga el bloque, lo anota en el
+/// registro. Cuando un agente lo ha consolidado (el bloque ya no está) y la aplicación lo había
+/// anotado, borra las carpetas del archivo que dejó ella, como pide el método, porque el permiso
+/// de Claude Code no deja borrarlas al agente. Nunca borra nada que no haya dejado anotado, ni en
+/// la misma preparación que archiva algo.
+fn seguir_el_legado(
+    raiz: &Path,
+    registro: &mut RegistroDeHuellas,
+    nada_archivado_ahora: bool,
+    informe: &mut InformeDeInicializacion,
+) -> io::Result<()> {
+    let ruta = archivos::ruta(raiz, catalogo::RUTA_INSTRUCCIONES_DEL_PROYECTO);
+    let Some((propio, _)) = archivos::leer(&ruta)? else {
+        return Ok(());
+    };
+    let con_bloque = propio
+        .lines()
+        .any(|linea| marcas::es_inicio(linea, marcas::LEGADO));
+    if con_bloque {
+        registro.registrar_archivo(CLAVE_LEGADO_PENDIENTE, "pendiente");
+        return Ok(());
+    }
+    if !nada_archivado_ahora
+        || registro
+            .huella_del_archivo(CLAVE_LEGADO_PENDIENTE)
+            .is_none()
+    {
+        return Ok(());
+    }
+    for carpeta in CARPETAS_DEL_LEGADO {
+        let ruta = archivos::ruta(raiz, carpeta);
+        if ruta.is_dir() {
+            fs::remove_dir_all(&ruta)?;
+            informe.anotar_cambio(carpeta, TipoDeCambio::Borrado, None);
+        }
+    }
+    registro.olvidar(CLAVE_LEGADO_PENDIENTE);
     Ok(())
 }
 

@@ -39,13 +39,7 @@ fn instalacion_nueva_crea_claude_codex_gemini_y_programator() {
 
     assert_eq!(
         nombres(&perfiles),
-        [
-            "Claude 1",
-            "Claude 2",
-            "Codex 1",
-            "Gemini 1",
-            "Programator 1"
-        ]
+        ["Claude 1", "Codex 1", "Gemini 1", "Programator 1"]
     );
     assert!(carpeta.existe(configuracion::ARCHIVO_PERFILES));
     assert_eq!(carpeta.leer(configuracion::ARCHIVO_VERSION_PERFILES), "4");

@@ -9,6 +9,7 @@
 pub mod actualizaciones;
 pub mod agentes;
 pub mod ajustes;
+pub mod aprendizaje;
 pub mod configuracion;
 pub mod cuentas;
 pub mod git;
@@ -16,3 +17,4 @@ pub mod instrucciones;
 pub mod plantillas;
 pub mod proyecto;
 pub mod textos;
+pub mod version_de_programa;

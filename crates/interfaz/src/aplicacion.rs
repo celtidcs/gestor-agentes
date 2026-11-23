@@ -9,12 +9,17 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
 use chrono::NaiveDateTime;
-use nucleo::configuracion::{ErrorDeConfiguracion, PerfilDeAgente, ProyectoRegistrado};
+use nucleo::actualizaciones::{Publicacion, Version};
+use nucleo::configuracion::{
+    ErrorDeConfiguracion, HerramientaDelPerfil, PerfilDeAgente, ProyectoRegistrado,
+};
 use nucleo::proyecto::estado::EstadoDelProyecto;
+use nucleo::proyecto::papeles::Papel;
 use nucleo::proyecto::revision_del_canal::ResumenDelEquipo;
+use nucleo::version_de_programa;
 
 use crate::orden::{self, ClaveDeOrden};
-use crate::perfiles::{self, Disponibilidad};
+use crate::perfiles::{self, CarpetaDelAgente, Disponibilidad, EstadoDelAgente};
 use crate::textos;
 use crate::trabajos::{Lanzamiento, ResultadoDeTrabajo, Trabajo};
 
@@ -120,6 +125,13 @@ pub struct Aplicacion {
     perfiles: Vec<PerfilDeAgente>,
     /// Disponibilidad de cada perfil, en su orden; nada mientras no ha terminado la detección.
     disponibilidad: Option<Vec<Disponibilidad>>,
+    /// Carpeta donde vive cada perfil y si existe, en su orden, de la última detección.
+    carpetas: Vec<Option<CarpetaDelAgente>>,
+    /// Indica si está en curso una búsqueda de agentes (al arrancar, Buscar de nuevo o al guardar
+    /// las rutas). Solo la marca [`Self::detectar`] y la borra el final del trabajo.
+    buscando: bool,
+    /// Última versión publicada de Programator, si ha llegado la consulta (F7).
+    programator_publicado: Option<Publicacion>,
     /// Ruta del ejecutable de cada perfil tal como se está editando en la pestaña de agentes.
     rutas: Vec<String>,
     seleccion: Option<String>,
@@ -128,6 +140,8 @@ pub struct Aplicacion {
     ocupada: bool,
     /// Línea con el estado del equipo del proyecto seleccionado, ya compuesta.
     equipo: Option<String>,
+    /// Papel elegido para el próximo agente que se abra. Vale para una sola apertura.
+    papel: Option<Papel>,
 }
 
 impl Aplicacion {
@@ -145,12 +159,16 @@ impl Aplicacion {
             filas: Vec::new(),
             perfiles: Vec::new(),
             disponibilidad: None,
+            carpetas: Vec::new(),
+            buscando: false,
+            programator_publicado: None,
             rutas: Vec::new(),
             seleccion: None,
             estado: String::new(),
             dialogos: VecDeque::new(),
             ocupada: false,
             equipo: None,
+            papel: None,
         };
         match proyectos {
             Ok(proyectos) => {
@@ -203,6 +221,40 @@ impl Aplicacion {
         self.disponibilidad.as_ref()?.get(indice)
     }
 
+    /// Carpeta donde vive el perfil de esa posición y si existe; nada si no se sabe.
+    #[must_use]
+    pub fn carpeta_del_agente(&self, indice: usize) -> Option<&CarpetaDelAgente> {
+        self.carpetas.get(indice)?.as_ref()
+    }
+
+    /// Anota la última versión publicada de Programator.
+    pub fn fijar_programator_publicado(&mut self, publicacion: Publicacion) {
+        self.programator_publicado = Some(publicacion);
+    }
+
+    /// Versión publicada de Programator más nueva que la del programa del perfil, si la hay.
+    #[must_use]
+    pub fn version_mas_nueva(&self, indice: usize) -> Option<Version> {
+        let instalada = self.carpeta_del_agente(indice)?.version();
+        version_de_programa::mas_nueva(instalada, self.programator_publicado.as_ref())
+    }
+
+    /// Indica si hay una búsqueda de agentes en curso. Abrir o borrar no cuentan.
+    #[must_use]
+    pub const fn buscando_agentes(&self) -> bool {
+        self.buscando
+    }
+
+    /// Estado del perfil de esa posición en la pestaña Agentes (ver
+    /// [`perfiles::estado_del_agente`]).
+    #[must_use]
+    pub fn estado_del_agente(&self, indice: usize) -> EstadoDelAgente {
+        let ruta_cambiada = self.perfiles.get(indice).is_some_and(|perfil| {
+            perfil.ejecutable().unwrap_or("") != self.ruta_editada(indice).trim()
+        });
+        perfiles::estado_del_agente(self.disponibilidad(indice), ruta_cambiada, self.buscando)
+    }
+
     /// Ruta del ejecutable del perfil tal como se está editando.
     #[must_use]
     pub fn ruta_editada(&self, indice: usize) -> &str {
@@ -249,7 +301,22 @@ impl Aplicacion {
         if !self.edicion_activa() {
             return None;
         }
+        self.buscando = true;
         self.empezar_trabajo(Trabajo::Detectar {
+            perfiles: self.perfiles.clone(),
+        })
+    }
+
+    /// Da de alta a mano una cuenta de `herramienta`: pide su carpeta, la añade a los perfiles y
+    /// vuelve a buscar los agentes (botones «Añadir cuenta de…» de la pestaña Agentes).
+    #[must_use]
+    pub fn pedir_cuenta(&mut self, herramienta: HerramientaDelPerfil) -> Option<Trabajo> {
+        if !self.edicion_activa() {
+            return None;
+        }
+        self.buscando = true;
+        self.empezar_trabajo(Trabajo::DarDeAltaCuenta {
+            herramienta,
             perfiles: self.perfiles.clone(),
         })
     }
@@ -399,11 +466,24 @@ impl Aplicacion {
             return None;
         }
         self.estado = textos::preparando(registro.nombre(), &perfil.nombre());
+        let papel = self.papel.take();
         self.empezar_trabajo(Trabajo::Abrir {
             nombre: registro.nombre().to_owned(),
             ruta: registro.ruta().to_owned(),
             perfil,
+            papel,
         })
+    }
+
+    /// Papel elegido para el próximo agente que se abra, si lo hay.
+    #[must_use]
+    pub const fn papel(&self) -> Option<Papel> {
+        self.papel
+    }
+
+    /// Elige el papel del próximo agente que se abra; nada para que lo pregunte él al arrancar.
+    pub fn elegir_papel(&mut self, papel: Option<Papel>) {
+        self.papel = papel;
     }
 
     /// Pide borrar del disco el proyecto seleccionado. Si su carpeta ya no existe, lo quita de la
@@ -447,6 +527,7 @@ impl Aplicacion {
     /// Recoge el resultado de un trabajo.
     pub fn terminar(&mut self, resultado: ResultadoDeTrabajo) {
         self.ocupada = false;
+        self.buscando = false;
         match resultado {
             ResultadoDeTrabajo::CarpetaElegida(Some(carpeta)) => self.agregar(&carpeta),
             ResultadoDeTrabajo::CarpetaElegida(None) => {}
@@ -468,6 +549,12 @@ impl Aplicacion {
                 };
                 let estado = match perfiles::aviso_de_tamano(&perfil, tamano_instrucciones) {
                     Some(aviso) => textos::con_aviso(&estado, &aviso),
+                    None => estado,
+                };
+                let estado = match self.version_mas_nueva_de(&perfil) {
+                    Some(nueva) => {
+                        textos::con_aviso(&estado, &textos::programator_anticuado(nueva))
+                    }
                     None => estado,
                 };
                 self.estado = match informe.avisos().len() {
@@ -510,8 +597,9 @@ impl Aplicacion {
             ResultadoDeTrabajo::Detectado {
                 perfiles,
                 disponibilidad,
+                carpetas,
                 anadidos,
-            } => self.recibir_deteccion(perfiles, disponibilidad, anadidos),
+            } => self.recibir_deteccion(perfiles, disponibilidad, carpetas, anadidos),
             ResultadoDeTrabajo::EjecutableElegido {
                 indice,
                 ruta: Some(ruta),
@@ -520,6 +608,10 @@ impl Aplicacion {
                 None => self.informar(textos::TITULO_ERROR, textos::ruta_no_unicode(&ruta)),
             },
             ResultadoDeTrabajo::EjecutableElegido { ruta: None, .. } => {}
+            ResultadoDeTrabajo::CuentaNoAnadida(None) => {}
+            ResultadoDeTrabajo::CuentaNoAnadida(Some(rechazo)) => {
+                self.informar(textos::TITULO_CUENTA, textos::cuenta_rechazada(&rechazo));
+            }
         }
         // Un trabajo, como abrir un agente, puede haber cambiado el canal del proyecto.
         self.leer_equipo();
@@ -531,6 +623,7 @@ impl Aplicacion {
         &mut self,
         perfiles: Vec<PerfilDeAgente>,
         disponibilidad: Vec<Disponibilidad>,
+        carpetas: Vec<Option<CarpetaDelAgente>>,
         anadidos: usize,
     ) {
         if anadidos > 0 {
@@ -541,6 +634,16 @@ impl Aplicacion {
         }
         self.poner_perfiles(perfiles);
         self.disponibilidad = Some(disponibilidad);
+        self.carpetas = carpetas;
+    }
+
+    /// [`Self::version_mas_nueva`] del perfil `perfil`, buscado por su identidad.
+    fn version_mas_nueva_de(&self, perfil: &PerfilDeAgente) -> Option<Version> {
+        let indice = self
+            .perfiles
+            .iter()
+            .position(|guardado| guardado.nombre() == perfil.nombre())?;
+        self.version_mas_nueva(indice)
     }
 
     /// Cambia los perfiles y deja las rutas editables como las guardadas.
@@ -555,6 +658,7 @@ impl Aplicacion {
     /// El hilo de trabajo se ha perdido: se deja de esperar y se avisa.
     pub fn trabajador_perdido(&mut self) {
         self.ocupada = false;
+        self.buscando = false;
         self.estado = textos::TRABAJADOR_PERDIDO.to_owned();
     }
 

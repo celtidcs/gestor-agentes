@@ -39,6 +39,27 @@ impl Consulta {
             tiempo: ajustes.tiempo_maximo_actualizacion(),
         })
     }
+
+    /// La consulta de la última versión de Programator, o nada si están desactivadas (F7).
+    #[must_use]
+    pub fn de_programator(ajustes: &Ajustes) -> Option<Self> {
+        ajustes.comprobar_actualizaciones().then(|| Self {
+            repositorio: ajustes.repositorio_de_programator().to_owned(),
+            tiempo: ajustes.tiempo_maximo_actualizacion(),
+        })
+    }
+}
+
+/// Última versión publicada en el repositorio de la consulta, sea cual sea la instalada.
+#[must_use]
+pub fn ultima_publicada(
+    consulta: &Consulta,
+    consultor: &dyn ConsultorDePublicaciones,
+) -> Option<Publicacion> {
+    let direccion = actualizaciones::direccion_de_la_consulta(&consulta.repositorio)?;
+    let agente = actualizaciones::agente_de_usuario(VERSION_INSTALADA);
+    let cuerpo = consultor.consultar(&direccion, &agente, consulta.tiempo)?;
+    actualizaciones::leer_publicacion(&cuerpo, &consulta.repositorio)
 }
 
 /// Consulta la última versión publicada y devuelve la publicación si es más nueva que
@@ -67,15 +88,36 @@ pub fn en_segundo_plano(
     consultor: Box<dyn ConsultorDePublicaciones + Send>,
     avisar: Box<dyn Fn() + Send>,
 ) -> Receiver<Publicacion> {
+    lanzar(consulta, consultor, avisar, |consulta, consultor| {
+        comprobar(consulta, VERSION_INSTALADA, consultor)
+    })
+}
+
+/// Como [`en_segundo_plano`], pero entrega la última versión publicada de Programator, sea cual
+/// sea, para compararla con la del Programator de cada perfil (F7).
+#[must_use]
+pub fn programator_en_segundo_plano(
+    consulta: Option<Consulta>,
+    consultor: Box<dyn ConsultorDePublicaciones + Send>,
+    avisar: Box<dyn Fn() + Send>,
+) -> Receiver<Publicacion> {
+    lanzar(consulta, consultor, avisar, ultima_publicada)
+}
+
+/// Hace `decidir` en un hilo propio y entrega lo que devuelva.
+fn lanzar(
+    consulta: Option<Consulta>,
+    consultor: Box<dyn ConsultorDePublicaciones + Send>,
+    avisar: Box<dyn Fn() + Send>,
+    decidir: fn(&Consulta, &dyn ConsultorDePublicaciones) -> Option<Publicacion>,
+) -> Receiver<Publicacion> {
     let (salida, entrada) = mpsc::channel();
     if let Some(consulta) = consulta {
         // Un hilo que no se puede crear solo cuesta el aviso: la aplicación sigue igual.
         let _ = thread::Builder::new()
             .name(NOMBRE_DEL_HILO.to_owned())
             .spawn(move || {
-                if let Some(publicacion) =
-                    comprobar(&consulta, VERSION_INSTALADA, consultor.as_ref())
-                {
+                if let Some(publicacion) = decidir(&consulta, consultor.as_ref()) {
                     if salida.send(publicacion).is_ok() {
                         avisar();
                     }

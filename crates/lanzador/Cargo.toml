@@ -10,4 +10,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+serde_json = "1"
 thiserror = "2"
+
+[dev-dependencies]
+# Analizador TOML de referencia para comprobar que las cadenas de `-c` de Codex se leen igual
+# que el valor original. Ya estaba en Cargo.lock por otra dependencia del espacio de trabajo.
+toml_edit = { version = "0.25", default-features = false, features = ["parse"] }

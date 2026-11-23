@@ -40,10 +40,12 @@ $CARPETA_PRUEBA = Join-Path $RAIZ "target\prueba-portable"
 $CONTENIDO_ESPERADO = @(
     "datos",
     "documentacion",
+    "documentacion\Licencia.txt",
     "documentacion\Manual de uso.md",
     "documentacion\Referencia de funcionalidades.md",
     "documentacion\Resolucion de problemas.md",
     "gestor-agentes.exe",
+    "gestor-vigilante.exe",
     "LEEME.txt"
 )
 
@@ -55,7 +57,9 @@ $COPIAS_EXACTAS = @(
     @{ Nombre = "Referencia de funcionalidades.md"; Origen = "documentation\features.md"
        Frase = "la referencia de funcionalidades es copia exacta de features.md" },
     @{ Nombre = "Manual de uso.md"; Origen = "documentation\usage.md"
-       Frase = "el manual de uso es copia exacta de usage.md" }
+       Frase = "el manual de uso es copia exacta de usage.md" },
+    @{ Nombre = "Licencia.txt"; Origen = "LICENSE"
+       Frase = "la licencia es copia exacta de LICENSE" }
 )
 
 # Carpeta del paquete con los datos del usuario.

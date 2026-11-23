@@ -33,6 +33,8 @@ Los encargos que empiezan por `revisión:` son de la revisión mensual de modelo
 ## Qué devuelve y quién lo verifica
 
 - Responde en `.gestor/canal/programator.md`. Debajo, el arnés añade el resultado de comprobar sus propuestas; esa línea es del arnés, no del modelo.
+- Cada respuesta empieza con `Para <tu identidad>: respuesta a <nombre corto>`. Tu vigilante te despierta con `[RESPUESTA DE PROGRAMATOR PARA <tu identidad>]`. No la contestes en el canal: verifícala.
+- Si el Programator instalado todavía no pone esa línea (0.12 y anteriores), su respuesta no te despierta. Espera mirando `.gestor/programator/latido.json` (vuelve a `reposo`) y la línea `LEÍDO:` de su bandeja con tu latido; no busques un texto concreto, porque Programator poda su bandeja.
 - Sus archivos quedan en `.gestor/candidatos/programator/` hasta que alguien los revise. Nada suyo entra en el proyecto sin más.
 - **Quien encarga, verifica**, con las reglas de `.gestor/consulta/verificacion.md`. Su declaración de cumplimiento no basta: comprueba contra el archivo real y verifica todo lo que diga de bibliotecas.
 

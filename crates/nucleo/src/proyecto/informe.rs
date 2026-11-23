@@ -18,6 +18,8 @@ pub enum TipoDeCambio {
     Respaldado,
     /// Se ha creado el repositorio git.
     RepositorioCreado,
+    /// Se ha borrado algo que la aplicación dejó en una versión anterior y ya no se usa.
+    Borrado,
 }
 
 impl TipoDeCambio {
@@ -31,6 +33,7 @@ impl TipoDeCambio {
             Self::Archivado => textos::CAMBIO_ARCHIVADO,
             Self::Respaldado => textos::CAMBIO_RESPALDADO,
             Self::RepositorioCreado => textos::CAMBIO_REPOSITORIO_CREADO,
+            Self::Borrado => textos::CAMBIO_BORRADO,
         }
     }
 

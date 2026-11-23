@@ -196,4 +196,8 @@ impl ConfiguracionDeInstrucciones for Configuracion {
     fn leer_instrucciones_antiguas(&self) -> Option<String> {
         fs::read_to_string(self.carpeta.join(ARCHIVO_INSTRUCCIONES_ANTIGUAS)).ok()
     }
+
+    fn carpeta_de_datos(&self) -> Option<PathBuf> {
+        Some(self.carpeta.clone())
+    }
 }

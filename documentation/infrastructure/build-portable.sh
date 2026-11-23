@@ -33,6 +33,11 @@ set -euo pipefail
 # Paquete de cargo que produce el ejecutable (crates/interfaz/Cargo.toml).
 readonly PAQUETE="gestor-agentes"
 
+# Vigilante del canal (crates/vigilante/Cargo.toml). Va junto al ejecutable, de
+# donde Gestor Agentes lo copia a cada proyecto (crates/nucleo/src/proyecto/vigilante.rs).
+readonly PAQUETE_VIGILANTE="vigilante"
+readonly EJECUTABLE_VIGILANTE="gestor-vigilante"
+
 # Carpeta de datos junto al ejecutable; debe coincidir con CARPETA_DE_DATOS de
 # crates/interfaz/src/rutas.rs (la configuración es portable).
 readonly CARPETA_DATOS="datos"
@@ -43,8 +48,8 @@ readonly CARPETA_DOCUMENTACION="documentacion"
 # Documentos del proyecto que se copian al paquete, en parejas de origen y
 # nombre dentro de él. Se copian en cada compilación para que nunca se
 # desincronicen. El manual sale de usage.md, para que tenga un solo original.
-readonly DOCUMENTOS_ORIGEN=("documentation/features.md" "documentation/usage.md")
-readonly DOCUMENTOS_DESTINO=("Referencia de funcionalidades.md" "Manual de uso.md")
+readonly DOCUMENTOS_ORIGEN=("documentation/features.md" "documentation/usage.md" "LICENSE")
+readonly DOCUMENTOS_DESTINO=("Referencia de funcionalidades.md" "Manual de uso.md" "Licencia.txt")
 
 # El guion vive en documentation/infrastructure/, dos niveles bajo la raíz.
 readonly DIRECTORIO_GUION="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -97,7 +102,7 @@ carpeta_release() {
 
 # Compila en release con el Cargo.lock confirmado (--locked).
 compilar() {
-    local argumentos=(build --release --locked -p "$PAQUETE" --manifest-path "$RAIZ_PROYECTO/Cargo.toml")
+    local argumentos=(build --release --locked -p "$PAQUETE" -p "$PAQUETE_VIGILANTE" --manifest-path "$RAIZ_PROYECTO/Cargo.toml")
     [ -n "$objetivo" ] && argumentos+=(--target "$objetivo")
     cargo "${argumentos[@]}" || fallar "la compilación ha fallado."
 }
@@ -118,6 +123,10 @@ montar_paquete() {
     local ejecutable="$1"
     local indice origen
     install -m 0755 "$ejecutable" "$destino/$PAQUETE"
+    local vigilante
+    vigilante="$(dirname "$ejecutable")/$EJECUTABLE_VIGILANTE"
+    [ -f "$vigilante" ] || fallar "no se ha generado el vigilante en $vigilante"
+    install -m 0755 "$vigilante" "$destino/$EJECUTABLE_VIGILANTE"
     cp -R "$carpeta_extras"/. "$destino"/
     mkdir -p "$destino/$CARPETA_DOCUMENTACION"
     for indice in "${!DOCUMENTOS_ORIGEN[@]}"; do
@@ -132,6 +141,7 @@ montar_paquete() {
 comprobar_paquete() {
     local imprescindibles=(
         "$PAQUETE"
+        "$EJECUTABLE_VIGILANTE"
         "LEEME.txt"
         "$CARPETA_DATOS"
         "$CARPETA_DOCUMENTACION/Manual de uso.md"

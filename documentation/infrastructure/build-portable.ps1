@@ -48,6 +48,11 @@ $PAQUETE = "gestor-agentes"
 # Nombre del ejecutable que genera cargo en Windows.
 $EJECUTABLE = "$PAQUETE.exe"
 
+# Vigilante del canal (crates/vigilante/Cargo.toml). Va junto al ejecutable, de donde Gestor
+# Agentes lo copia a cada proyecto (crates/nucleo/src/proyecto/vigilante.rs).
+$PAQUETE_VIGILANTE = "vigilante"
+$EJECUTABLE_VIGILANTE = "gestor-vigilante.exe"
+
 # Carpeta de datos junto al ejecutable; debe coincidir con CARPETA_DE_DATOS de
 # crates/interfaz/src/rutas.rs (la configuracion es portable).
 $CARPETA_DATOS = "datos"
@@ -65,6 +70,7 @@ $CARPETAS_PRESERVADAS = @($CARPETA_DATOS)
 $DOCUMENTOS_DEL_PROYECTO = @{
     "documentation\features.md" = "Referencia de funcionalidades.md"
     "documentation\usage.md"    = "Manual de uso.md"
+    "LICENSE"                   = "Licencia.txt"
 }
 
 # El guion vive en documentation/infrastructure/, dos niveles bajo la raiz.
@@ -125,7 +131,7 @@ function Get-CarpetaRelease {
     workspace ya activa lto y strip.
 #>
 function Invoke-Compilacion {
-    $argumentos = @("build", "--release", "--locked", "-p", $PAQUETE,
+    $argumentos = @("build", "--release", "--locked", "-p", $PAQUETE, "-p", $PAQUETE_VIGILANTE,
         "--manifest-path", (Join-Path $raizProyecto "Cargo.toml"))
     if ($Objetivo -ne "") { $argumentos += @("--target", $Objetivo) }
 
@@ -192,6 +198,9 @@ function Copy-ContenidoPortable {
     )
 
     Copy-Item -Path $RutaEjecutable -Destination (Join-Path $Ruta $EJECUTABLE) -Force
+    $vigilante = Join-Path (Split-Path -Parent $RutaEjecutable) $EJECUTABLE_VIGILANTE
+    if (-not (Test-Path $vigilante)) { throw "No se ha generado el vigilante en $vigilante" }
+    Copy-Item -Path $vigilante -Destination (Join-Path $Ruta $EJECUTABLE_VIGILANTE) -Force
     Copy-Item -Path (Join-Path $CarpetaExtras "*") -Destination $Ruta -Recurse -Force
 
     $carpetaDocs = Join-Path $Ruta $CARPETA_DOCUMENTACION
@@ -232,6 +241,7 @@ Copy-ContenidoPortable -Ruta $Destino -RutaEjecutable $ejecutableCompilado
 Write-Host "[4/4] Comprobando el paquete..." -ForegroundColor Yellow
 $imprescindibles = @(
     $EJECUTABLE,
+    $EJECUTABLE_VIGILANTE,
     "LEEME.txt",
     $CARPETA_DATOS,
     "$CARPETA_DOCUMENTACION\Manual de uso.md",

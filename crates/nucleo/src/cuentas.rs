@@ -11,7 +11,7 @@
 //! de base los crea la configuración.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::configuracion::{HerramientaDelPerfil, PerfilDeAgente};
 
@@ -143,6 +143,82 @@ pub fn incorporar(perfiles: &mut Vec<PerfilDeAgente>, detectados: Vec<PerfilDeAg
         anadidos += 1;
     }
     anadidos
+}
+
+/// Por qué no se puede dar de alta una cuenta a mano.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AltaRechazada {
+    /// La herramienta no tiene cuentas separadas por carpeta (Gemini, Programator).
+    SinCuentas,
+    /// Otro perfil de la misma herramienta ya usa esa carpeta; lleva su identidad («Claude 2»).
+    CarpetaEnUso(String),
+}
+
+/// Da de alta a mano la cuenta de `herramienta` que vive en `carpeta`, para las que no están en
+/// la carpeta personal con el nombre de siempre (CLAUDE_CONFIG_DIR o CODEX_HOME en otra ruta).
+/// El perfil nuevo lleva la instancia siguiente a la mayor de su herramienta y va detrás del
+/// último de ella. Devuelve su identidad.
+///
+/// # Errors
+///
+/// [`AltaRechazada`] si la herramienta no tiene cuentas o si otro perfil suyo ya usa la carpeta,
+/// comparada ya expandida y sin distinguir barras, barra final ni, en Windows, mayúsculas.
+pub fn dar_de_alta(
+    perfiles: &mut Vec<PerfilDeAgente>,
+    herramienta: HerramientaDelPerfil,
+    carpeta: &Path,
+    carpeta_personal: &Path,
+) -> Result<String, AltaRechazada> {
+    let regla = REGLAS
+        .iter()
+        .find(|regla| regla.herramienta == herramienta)
+        .ok_or(AltaRechazada::SinCuentas)?;
+    let buscada = comparable(carpeta);
+    if let Some(ocupado) = perfiles
+        .iter()
+        .filter(|p| p.tipo() == herramienta)
+        .find(|perfil| {
+            carpeta_de_la_cuenta(perfil, regla, carpeta_personal)
+                .is_some_and(|suya| comparable(&suya) == buscada)
+        })
+    {
+        return Err(AltaRechazada::CarpetaEnUso(ocupado.nombre()));
+    }
+    let instancia = perfiles
+        .iter()
+        .filter(|perfil| perfil.tipo() == herramienta)
+        .map(PerfilDeAgente::instancia)
+        .max()
+        .map_or(1, |mayor| mayor + 1);
+    let nuevo =
+        PerfilDeAgente::new(herramienta, instancia).con_directorio(&carpeta.to_string_lossy());
+    let nombre = nuevo.nombre();
+    incorporar(perfiles, vec![nuevo]);
+    Ok(nombre)
+}
+
+/// Carpeta donde vive la cuenta de un perfil: la fijada o, para la instancia 1 sin carpeta, la de
+/// la herramienta por defecto en la carpeta personal.
+fn carpeta_de_la_cuenta(
+    perfil: &PerfilDeAgente,
+    regla: &ReglaDeCuenta,
+    carpeta_personal: &Path,
+) -> Option<PathBuf> {
+    perfil
+        .directorio_configuracion_expandido(carpeta_personal)
+        .or_else(|| (perfil.instancia() == 1).then(|| carpeta_personal.join(regla.carpeta)))
+}
+
+/// Forma de una ruta para compararla: barras normales, sin barra final y, en Windows, en
+/// minúsculas, porque allí las rutas no distinguen mayúsculas.
+fn comparable(ruta: &Path) -> String {
+    let texto = ruta.to_string_lossy().replace('\\', "/");
+    let texto = texto.trim_end_matches('/');
+    if cfg!(windows) {
+        texto.to_lowercase()
+    } else {
+        texto.to_owned()
+    }
 }
 
 /// Lista las carpetas de la carpeta personal que pueden ser de una cuenta (las que empiezan por

@@ -2,6 +2,8 @@
 
 use eframe::egui::{self, Color32};
 
+use crate::perfiles::EstadoDelAgente;
+
 /// Fondo de la ventana.
 pub const FONDO: Color32 = Color32::from_rgb(0x1e, 0x1e, 0x2e);
 /// Fondo de la tabla, del núcleo común y de las pestañas sin seleccionar.
@@ -22,6 +24,11 @@ pub const MORADO: Color32 = Color32::from_rgb(0xcb, 0xa6, 0xf7);
 pub const VERDE: Color32 = Color32::from_rgb(0xa6, 0xe3, 0xa1);
 /// Botones de peligro.
 pub const ROJO: Color32 = Color32::from_rgb(0xf3, 0x8b, 0xa8);
+/// Agente al que le falta la cuenta: el amarillo de la misma paleta (Catppuccin Mocha, como los
+/// demás colores de la 2.3.2).
+pub const AMBAR: Color32 = Color32::from_rgb(0xf9, 0xe2, 0xaf);
+/// Agente sin comprobar.
+pub const GRIS: Color32 = TEXTO_APAGADO;
 
 /// Tamaño del encabezado, como el FontSize 24 de la 2.3.2.
 pub const TAMANO_ENCABEZADO: f32 = 24.0;
@@ -37,6 +44,12 @@ pub const ANCHO_DIALOGO: f32 = 460.0;
 pub const MARGEN: i8 = 20;
 /// Margen interior de los paneles de contenido (el de la 2.3.2).
 pub const MARGEN_INTERIOR: i8 = 12;
+/// Margen interior de la celda coloreada de la columna Agente. Nuevo en la 3.6.0: deja aire
+/// alrededor del nombre sin que la fila crezca más que los botones de su derecha.
+pub const MARGEN_CELDA_DE_AGENTE: i8 = 4;
+/// Radio de las esquinas de la celda coloreada de la columna Agente (3.6.0), el mismo aspecto
+/// redondeado que los botones de egui.
+pub const RADIO_CELDA_DE_AGENTE: u8 = 3;
 /// Tamaño inicial de la ventana (900 por 600).
 pub const TAMANO_VENTANA: [f32; 2] = [900.0, 600.0];
 /// Ancho del campo de la ruta de un ejecutable en la pestaña de agentes. Nuevo en la 3.0.0:
@@ -65,5 +78,17 @@ pub const fn color_de_perfil(posicion: usize) -> Color32 {
         MORADO
     } else {
         VERDE
+    }
+}
+
+/// Color de la celda Agente según su estado: verde localizado, ámbar falta la cuenta, rojo no
+/// encontrado y gris sin comprobar. La palabra del estado va además en la columna Estado.
+#[must_use]
+pub const fn color_de_estado(estado: EstadoDelAgente) -> Color32 {
+    match estado {
+        EstadoDelAgente::Localizado => VERDE,
+        EstadoDelAgente::FaltaLaCuenta => AMBAR,
+        EstadoDelAgente::NoEncontrado => ROJO,
+        EstadoDelAgente::SinComprobar => GRIS,
     }
 }

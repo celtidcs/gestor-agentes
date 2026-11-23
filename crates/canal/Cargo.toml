@@ -1,0 +1,12 @@
+[package]
+name = "canal"
+description = "Lectura pura del canal de Gestor Agentes: identidades, encargos, mutaciones vivas y huellas, sin disco ni reloj."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

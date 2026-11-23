@@ -6,9 +6,11 @@
 use std::path::Path;
 
 use lanzador::ErrorDeLanzamiento;
+use nucleo::actualizaciones::Version;
 use nucleo::configuracion::ErrorDeConfiguracion;
+use nucleo::cuentas::AltaRechazada;
 
-use crate::perfiles::Disponibilidad;
+use crate::perfiles::{CarpetaDelAgente, Disponibilidad, EstadoDelAgente};
 
 /// Título de la ventana y encabezado.
 pub const TITULO: &str = "Gestor Agentes";
@@ -54,7 +56,17 @@ pub fn linea_del_equipo(
     }];
     for latido in &resumen.latidos {
         let minutos = (ahora - latido.momento).num_minutes();
-        partes.push(format!("{} {}", latido.identificador, antiguedad(minutos)));
+        let vigilancia = resumen
+            .vigilancia
+            .iter()
+            .find(|v| v.identificador == latido.identificador)
+            .map(nota_de_vigilancia)
+            .unwrap_or_default();
+        partes.push(format!(
+            "{} {}{vigilancia}",
+            latido.identificador,
+            antiguedad(minutos)
+        ));
     }
     partes.push(match resumen.reservas {
         0 => "sin reservas".to_owned(),
@@ -68,6 +80,46 @@ pub fn linea_del_equipo(
         partes.push("autoexclusiones vigentes".to_owned());
     }
     format!("Equipo · {}", partes.join(" · "))
+}
+
+/// Lo que se añade tras el latido de un agente: si su vigilante vigila o ha caído y cuántos
+/// encargos tiene sin acuse.
+fn nota_de_vigilancia(vigilancia: &nucleo::proyecto::vigilancia::VigilanciaDeAgente) -> String {
+    use nucleo::proyecto::vigilancia::EstadoDelVigilante;
+    let mut notas = Vec::new();
+    match vigilancia.vigilante {
+        Some(EstadoDelVigilante::Vigilando) => notas.push("vigila".to_owned()),
+        Some(EstadoDelVigilante::Caido) => notas.push("VIGILANTE CAÍDO".to_owned()),
+        None => {}
+    }
+    match vigilancia.encargos_sin_acuse {
+        0 => {}
+        1 => notas.push("1 encargo sin RECIBIDO".to_owned()),
+        n => notas.push(format!("{n} encargos sin RECIBIDO")),
+    }
+    if notas.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", notas.join(", "))
+    }
+}
+
+/// Etiqueta de la elección del papel del próximo agente que se abra.
+pub const ETIQUETA_PAPEL: &str = "Papel del agente que abras:";
+
+/// Opción de no elegir papel: el agente lo pregunta al arrancar.
+pub const PAPEL_SIN_ELEGIR: &str = "que lo pregunte";
+
+/// Opción de Jefe de proyecto.
+pub const PAPEL_JEFE: &str = "Jefe de proyecto";
+
+/// Opción de ayudante.
+pub const PAPEL_AYUDANTE: &str = "ayudante";
+
+/// Detalle del cambio en estado.md al anotar el papel elegido.
+#[must_use]
+pub fn papel_anotado(identidad: &str, papel: nucleo::proyecto::papeles::Papel) -> String {
+    format!("{identidad} anotado como {}", papel.nombre())
 }
 
 /// Título del aviso de versión nueva.
@@ -115,6 +167,32 @@ pub const BOTON_GUARDAR_RUTAS: &str = "Guardar rutas";
 /// Botón que vuelve a buscar los agentes sin cambiar nada.
 pub const BOTON_BUSCAR_DE_NUEVO: &str = "Buscar de nuevo";
 
+/// Botón de la pestaña Agentes que da de alta a mano una cuenta de Claude Code.
+pub const BOTON_CUENTA_CLAUDE: &str = "Añadir cuenta de Claude…";
+
+/// Botón de la pestaña Agentes que da de alta a mano una cuenta de Codex.
+pub const BOTON_CUENTA_CODEX: &str = "Añadir cuenta de Codex…";
+
+/// Título del selector de la carpeta de una cuenta.
+pub const TITULO_SELECTOR_CUENTA: &str =
+    "Seleccionar la carpeta de la cuenta (la de CLAUDE_CONFIG_DIR o CODEX_HOME)";
+
+/// Título del aviso cuando una cuenta no se puede dar de alta.
+pub const TITULO_CUENTA: &str = "Cuenta no añadida";
+
+/// Por qué no se ha dado de alta la cuenta.
+#[must_use]
+pub fn cuenta_rechazada(rechazo: &AltaRechazada) -> String {
+    match rechazo {
+        AltaRechazada::SinCuentas => {
+            String::from("Esa herramienta no tiene cuentas separadas por carpeta.")
+        }
+        AltaRechazada::CarpetaEnUso(perfil) => {
+            format!("Esa carpeta ya es la de {perfil}. Cada cuenta necesita su propia carpeta.")
+        }
+    }
+}
+
 /// Título del selector de archivos del ejecutable.
 pub const TITULO_SELECTOR_EJECUTABLE: &str = "Seleccionar el ejecutable del agente";
 
@@ -125,16 +203,64 @@ pub const BUSCANDO_AGENTES: &str = "Buscando agentes…";
 pub const NINGUN_AGENTE: &str =
     "No se ha encontrado ningún agente. Indica la ruta de sus programas en la pestaña Agentes.";
 
-/// Estado de un perfil en la pestaña de agentes.
+/// Separador entre las partes del estado de un agente.
+const SEPARADOR_DE_ESTADO: &str = " · ";
+
+/// Palabra del estado de un agente, que acompaña al color de su celda para que no dependa solo
+/// del color.
 #[must_use]
-pub fn disponibilidad(disponibilidad: Option<&Disponibilidad>) -> String {
-    match disponibilidad {
-        None => BUSCANDO_AGENTES.to_owned(),
-        Some(Disponibilidad::Disponible(ruta)) => format!("Encontrado: {}", ruta.display()),
-        Some(Disponibilidad::SinEjecutable) => String::from("No encontrado"),
-        Some(Disponibilidad::SinCuenta(carpeta)) => {
-            format!("Falta la carpeta de su cuenta: {}", carpeta.display())
-        }
+pub const fn palabra_de_estado(estado: EstadoDelAgente) -> &'static str {
+    match estado {
+        EstadoDelAgente::Localizado => "Localizado",
+        EstadoDelAgente::FaltaLaCuenta => "Falta la cuenta",
+        EstadoDelAgente::NoEncontrado => "No encontrado",
+        EstadoDelAgente::SinComprobar => "Sin comprobar",
+    }
+}
+
+/// Columna Estado de un perfil en la pestaña de agentes: la palabra del estado, la carpeta donde
+/// vive el agente y si existe, y el programa encontrado. Sin comprobar solo lleva la palabra,
+/// porque lo demás puede estar desfasado.
+#[must_use]
+pub fn estado_de_agente(
+    estado: EstadoDelAgente,
+    disponibilidad: Option<&Disponibilidad>,
+    carpeta: Option<&CarpetaDelAgente>,
+) -> String {
+    let mut partes = vec![palabra_de_estado(estado).to_owned()];
+    if estado == EstadoDelAgente::SinComprobar {
+        return partes.concat();
+    }
+    if let Some(carpeta) = carpeta {
+        partes.push(if carpeta.existe() {
+            format!("carpeta {}", carpeta.ruta().display())
+        } else {
+            format!("carpeta {} (no existe)", carpeta.ruta().display())
+        });
+    }
+    if let Some(Disponibilidad::Disponible(programa)) = disponibilidad {
+        partes.push(format!("programa {}", programa.display()));
+    }
+    partes.join(SEPARADOR_DE_ESTADO)
+}
+
+/// Aviso de que la ruta de Programator apunta a una versión anterior a la publicada (F7).
+#[must_use]
+pub fn programator_anticuado(nueva: Version) -> String {
+    format!(
+        "la ruta de Programator apunta a una versión antigua; hay la {nueva}: descárgala y cambia          la ruta en la pestaña Agentes"
+    )
+}
+
+/// Estado de un agente con la versión de su programa, si se conoce, y la nueva si la hay.
+#[must_use]
+pub fn con_version(estado: String, instalada: Option<Version>, nueva: Option<Version>) -> String {
+    match (instalada, nueva) {
+        (Some(instalada), Some(nueva)) => format!(
+            "{estado}{SEPARADOR_DE_ESTADO}versión {instalada} (hay la {nueva}: cambia la ruta)"
+        ),
+        (Some(instalada), None) => format!("{estado}{SEPARADOR_DE_ESTADO}versión {instalada}"),
+        (None, _) => estado,
     }
 }
 

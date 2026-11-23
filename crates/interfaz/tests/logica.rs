@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{FixedOffset, TimeZone};
 use gestor_agentes::perfiles::Disponibilidad;
-use gestor_agentes::{fecha, icono, orden, perfiles, rutas, textos};
+use gestor_agentes::{fecha, icono, orden, perfiles, rutas, tema, textos};
 use lanzador::{Herramienta, Sistema};
 use nucleo::agentes::TipoAgente;
 use nucleo::configuracion::{HerramientaDelPerfil, PerfilDeAgente};
@@ -366,7 +366,7 @@ fn con_ejecutable_falta_la_cuenta_si_su_carpeta_no_existe() {
 }
 
 #[test]
-fn solo_claude_y_codex_desde_la_segunda_exigen_su_carpeta_de_cuenta() {
+fn claude_y_codex_exigen_su_carpeta_de_cuenta_en_todas_sus_instancias() {
     let casa = Path::new("/h");
     let con_carpeta =
         |tipo, instancia, carpeta: &str| perfil(tipo, instancia).con_directorio(carpeta);
@@ -380,15 +380,90 @@ fn solo_claude_y_codex_desde_la_segunda_exigen_su_carpeta_de_cuenta() {
         exigida(&con_carpeta(HerramientaDelPerfil::Codex, 3, "~/.codex3")),
         Some(casa.join(".codex3"))
     );
+    // F9: también la primera cuenta, y sin carpeta fijada la de la herramienta.
     assert_eq!(
         exigida(&con_carpeta(HerramientaDelPerfil::Claude, 1, "~/.claude")),
-        None
+        Some(casa.join(".claude"))
     );
-    assert_eq!(exigida(&perfil(HerramientaDelPerfil::Claude, 2)), None);
+    assert_eq!(
+        exigida(&perfil(HerramientaDelPerfil::Claude, 2)),
+        Some(casa.join(".claude"))
+    );
+    assert_eq!(
+        exigida(&perfil(HerramientaDelPerfil::Codex, 1)),
+        Some(casa.join(".codex"))
+    );
     assert_eq!(
         exigida(&con_carpeta(HerramientaDelPerfil::Gemini, 2, "~/.gemini2")),
         None
     );
+    assert_eq!(exigida(&perfil(HerramientaDelPerfil::Programator, 1)), None);
+}
+
+#[test]
+fn carpeta_donde_vive_cada_agente() {
+    let casa = Path::new("/h");
+    let carpeta = |p: &PerfilDeAgente| perfiles::carpeta_del_agente(p, Some(casa));
+    assert_eq!(
+        carpeta(&perfil(HerramientaDelPerfil::Claude, 1)),
+        Some(casa.join(".claude"))
+    );
+    assert_eq!(
+        carpeta(&perfil(HerramientaDelPerfil::Claude, 2).con_directorio("~/.claude2")),
+        Some(casa.join(".claude2"))
+    );
+    assert_eq!(
+        carpeta(&perfil(HerramientaDelPerfil::Codex, 1)),
+        Some(casa.join(".codex"))
+    );
+    assert_eq!(
+        carpeta(&perfil(HerramientaDelPerfil::Codex, 1).con_directorio("/cuentas/codex")),
+        Some(PathBuf::from("/cuentas/codex"))
+    );
+    assert_eq!(
+        carpeta(&perfil(HerramientaDelPerfil::Gemini, 1)),
+        Some(casa.join(".gemini"))
+    );
+    assert_eq!(carpeta(&perfil(HerramientaDelPerfil::Programator, 1)), None);
+    assert_eq!(
+        carpeta(
+            &perfil(HerramientaDelPerfil::Programator, 1).con_ejecutable("~/App/programator.exe")
+        ),
+        Some(casa.join("App"))
+    );
+}
+
+#[test]
+fn estado_del_agente_segun_lo_detectado() {
+    use perfiles::EstadoDelAgente::{FaltaLaCuenta, Localizado, NoEncontrado, SinComprobar};
+    let disponible = Disponibilidad::Disponible(PathBuf::from("/bin/x"));
+    let sin_cuenta = Disponibilidad::SinCuenta(PathBuf::from("/h/.c"));
+    let estado = perfiles::estado_del_agente;
+    assert_eq!(estado(Some(&disponible), false, false), Localizado);
+    assert_eq!(estado(Some(&sin_cuenta), false, false), FaltaLaCuenta);
+    assert_eq!(
+        estado(Some(&Disponibilidad::SinEjecutable), false, false),
+        NoEncontrado
+    );
+    assert_eq!(estado(None, false, false), SinComprobar);
+    assert_eq!(estado(Some(&disponible), true, false), SinComprobar);
+    assert_eq!(estado(Some(&disponible), false, true), SinComprobar);
+}
+
+#[test]
+fn color_de_cada_estado_del_agente() {
+    use perfiles::EstadoDelAgente::{FaltaLaCuenta, Localizado, NoEncontrado, SinComprobar};
+    assert_eq!(tema::color_de_estado(Localizado), tema::VERDE);
+    assert_eq!(tema::color_de_estado(FaltaLaCuenta), tema::AMBAR);
+    assert_eq!(tema::color_de_estado(NoEncontrado), tema::ROJO);
+    assert_eq!(tema::color_de_estado(SinComprobar), tema::GRIS);
+    let colores = [tema::VERDE, tema::AMBAR, tema::ROJO, tema::GRIS];
+    for (posicion, color) in colores.iter().enumerate() {
+        assert!(
+            colores[posicion + 1..].iter().all(|otro| color != otro),
+            "dos estados con el mismo color"
+        );
+    }
 }
 
 #[test]
@@ -406,19 +481,45 @@ fn el_ejecutable_fijado_se_expande_y_sin_ruta_no_hay() {
 }
 
 #[test]
-fn textos_de_disponibilidad() {
-    assert_eq!(textos::disponibilidad(None), "Buscando agentes…");
+fn textos_del_estado_de_un_agente() {
+    use perfiles::{CarpetaDelAgente, EstadoDelAgente};
+    let programa = Disponibilidad::Disponible(PathBuf::from("/bin/x"));
+    let carpeta = CarpetaDelAgente::new(PathBuf::from("/h/.c2"), true);
+    let sin_carpeta = CarpetaDelAgente::new(PathBuf::from("/h/.c2"), false);
     assert_eq!(
-        textos::disponibilidad(Some(&Disponibilidad::SinEjecutable)),
+        textos::estado_de_agente(EstadoDelAgente::Localizado, Some(&programa), Some(&carpeta)),
+        format!(
+            "Localizado · carpeta {} · programa {}",
+            Path::new("/h/.c2").display(),
+            Path::new("/bin/x").display()
+        )
+    );
+    assert_eq!(
+        textos::estado_de_agente(
+            EstadoDelAgente::FaltaLaCuenta,
+            Some(&Disponibilidad::SinCuenta(PathBuf::from("/h/.c2"))),
+            Some(&sin_carpeta)
+        ),
+        format!(
+            "Falta la cuenta · carpeta {} (no existe)",
+            Path::new("/h/.c2").display()
+        )
+    );
+    assert_eq!(
+        textos::estado_de_agente(
+            EstadoDelAgente::NoEncontrado,
+            Some(&Disponibilidad::SinEjecutable),
+            None
+        ),
         "No encontrado"
     );
-    assert!(
-        textos::disponibilidad(Some(&Disponibilidad::Disponible(PathBuf::from("/bin/x"))))
-            .starts_with("Encontrado: ")
-    );
-    assert!(
-        textos::disponibilidad(Some(&Disponibilidad::SinCuenta(PathBuf::from("/h/.c2"))))
-            .starts_with("Falta la carpeta de su cuenta: ")
+    assert_eq!(
+        textos::estado_de_agente(
+            EstadoDelAgente::SinComprobar,
+            Some(&programa),
+            Some(&carpeta)
+        ),
+        "Sin comprobar"
     );
 }
 

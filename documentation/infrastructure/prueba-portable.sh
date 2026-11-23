@@ -38,18 +38,21 @@ readonly PAQUETE="$CARPETA_PRUEBA/portable"
 readonly CONTENIDO_ESPERADO="LEEME.txt
 datos
 documentacion
+documentacion/Licencia.txt
 documentacion/Manual de uso.md
 documentacion/Referencia de funcionalidades.md
 documentacion/Resolucion de problemas.md
-gestor-agentes"
+gestor-agentes
+gestor-vigilante"
 
 # Documentos que el paquete lleva como copia exacta: origen en el
 # proyecto, nombre dentro de documentacion/ y texto de la barrera. La frase de
 # la referencia es la de siempre, para que la salida sin --paquete no cambie.
-readonly COPIAS_ORIGEN=("documentation/features.md" "documentation/usage.md")
-readonly COPIAS_NOMBRE=("Referencia de funcionalidades.md" "Manual de uso.md")
+readonly COPIAS_ORIGEN=("documentation/features.md" "documentation/usage.md" "LICENSE")
+readonly COPIAS_NOMBRE=("Referencia de funcionalidades.md" "Manual de uso.md" "Licencia.txt")
 readonly COPIAS_FRASE=("la referencia de funcionalidades es copia exacta de features.md"
-    "el manual de uso es copia exacta de usage.md")
+    "el manual de uso es copia exacta de usage.md"
+    "la licencia es copia exacta de LICENSE")
 
 # Textos de la 2.x que no deben aparecer en el paquete.
 readonly TEXTOS_PROHIBIDOS=("GestorClaude.exe" ".NET" "Guardar configuracion" "Restaurar configuracion"

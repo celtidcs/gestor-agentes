@@ -19,6 +19,13 @@ pub(crate) const POWERSHELL: &str = "powershell.exe";
 /// título vuelva enseguida y lo bastante largo para no cargar la consola.
 const INTERVALO_DE_RESTAURACION_DEL_TITULO_MS: u32 = 1000;
 
+/// Clase de C# que restaura el título desde un hilo del sistema. Un bloque de PowerShell como
+/// TimerCallback no sirve: corre en un hilo sin entorno de PowerShell y tumba powershell.exe con
+/// PSInvalidOperation en ScriptBlock.GetContextFromTLS (evento 1001 de Windows Error Reporting,
+/// visto 40 veces entre el 2026-11-19 y el 2026-11-22, dos segundos después de abrir cada
+/// terminal). El agente seguía vivo porque la consola sobrevive, pero la terminal no.
+const CLASE_DEL_TITULO: &str = "GestorAgentesTitulo";
+
 /// Emuladores de terminal de Linux, por orden de preferencia: GNOME, KDE, XFCE y X11 genérico.
 /// xterm es el último recurso, porque está en casi cualquier sistema con X11.
 pub(crate) const TERMINALES_LINUX: [TerminalLinux; 4] = [
@@ -71,6 +78,33 @@ impl TerminalLinux {
     }
 }
 
+/// Vigilante del canal dentro del proyecto, relativo a su carpeta. Lo copia ahí Gestor Agentes
+/// (nucleo::proyecto::vigilante, CARPETA_DEL_VIGILANTE y NOMBRE_DEL_VIGILANTE).
+const VIGILANTE_POWERSHELL: &str = ".gestor\\vigilante\\gestor-vigilante.exe";
+
+/// El mismo vigilante, para bash.
+const VIGILANTE_BASH: &str = ".gestor/vigilante/gestor-vigilante";
+
+/// Opciones del vigilante persistente de Codex que lanza la terminal antes de abrirlo. La terminal
+/// añade su propio número de proceso tras ellas, y la identidad le llega en GESTOR_AGENTE.
+const OPCIONES_DEL_VIGILANTE_DE_CODEX: &str = "--persistente --entrega codex --desde-terminal";
+
+/// Línea de PowerShell que, si el proyecto tiene el vigilante, lo deja en segundo plano y oculto
+/// vigilando para la sesión de Codex que se abre a continuación en esta terminal. Va fuera del
+/// sandbox de Codex, que no le deja ver los procesos.
+fn vigilante_de_codex_powershell() -> String {
+    format!(
+        "if (Test-Path -LiteralPath '{VIGILANTE_POWERSHELL}') {{ Start-Process -FilePath '{VIGILANTE_POWERSHELL}' -ArgumentList \"{OPCIONES_DEL_VIGILANTE_DE_CODEX} $PID\" -WindowStyle Hidden }}"
+    )
+}
+
+/// Lo mismo en bash, con la salida descartada para no ensuciar la terminal.
+fn vigilante_de_codex_bash() -> String {
+    format!(
+        "if [ -x '{VIGILANTE_BASH}' ]; then '{VIGILANTE_BASH}' {OPCIONES_DEL_VIGILANTE_DE_CODEX} $$ >/dev/null 2>&1 & fi; "
+    )
+}
+
 /// Variable de entorno que se fija dentro del guion de la terminal.
 pub(crate) struct Asignacion<'a> {
     /// Nombre de la variable; lo fija el programa, nunca el usuario.
@@ -81,21 +115,26 @@ pub(crate) struct Asignacion<'a> {
 
 /// Guion de PowerShell que fija el título (y lo restaura cada segundo con un temporizador, porque
 /// las interfaces de terminal de los agentes lo cambian), asigna las variables, entra en la
-/// carpeta y ejecuta el programa con sus argumentos.
+/// carpeta, lanza el vigilante de Codex si `con_vigilante_de_codex` y ejecuta el programa con sus
+/// argumentos.
 pub(crate) fn guion_powershell(
     titulo: &str,
     variables: &[Asignacion<'_>],
     carpeta: &str,
     ejecutable: &str,
     argumentos: &[&str],
+    con_vigilante_de_codex: bool,
 ) -> String {
     let mut partes = vec![
         format!("$t = '{}'", comilla_simple_powershell(titulo)),
         "[Console]::Title = $t".to_owned(),
-        "$cb = [System.Threading.TimerCallback]{param($s) [Console]::Title = $s}".to_owned(),
         format!(
-            "$tmr = New-Object System.Threading.Timer($cb, $t, 0, {INTERVALO_DE_RESTAURACION_DEL_TITULO_MS})"
+            "Add-Type -TypeDefinition 'public static class {CLASE_DEL_TITULO} {{ \
+             static System.Threading.Timer reloj; \
+             public static void Fijar(string titulo) {{ reloj = new System.Threading.Timer(estado => System.Console.Title = titulo, null, 0, {INTERVALO_DE_RESTAURACION_DEL_TITULO_MS}); }} \
+             public static void Parar() {{ if (reloj != null) {{ reloj.Dispose(); }} }} }}'"
         ),
+        format!("[{CLASE_DEL_TITULO}]::Fijar($t)"),
     ];
     partes.extend(variables.iter().map(|v| {
         format!(
@@ -108,12 +147,15 @@ pub(crate) fn guion_powershell(
         "Set-Location -LiteralPath '{}'",
         comilla_simple_powershell(carpeta)
     ));
+    if con_vigilante_de_codex {
+        partes.push(vigilante_de_codex_powershell());
+    }
     let mut llamada = format!("& '{}'", comilla_simple_powershell(ejecutable));
     for argumento in argumentos {
         anadir_entre_comillas(&mut llamada, " ", &comilla_simple_powershell(argumento), "");
     }
     partes.push(llamada);
-    partes.push("$tmr.Dispose()".to_owned());
+    partes.push(format!("[{CLASE_DEL_TITULO}]::Parar()"));
     partes.push("[Console]::Title = $t".to_owned());
     partes.join("; ")
 }
@@ -127,20 +169,24 @@ pub(crate) fn argumentos_powershell(guion: &str) -> Vec<OsString> {
     ]
 }
 
-/// Guion de bash que exporta las variables, entra en la carpeta, ejecuta el programa con sus
-/// argumentos y, al terminar, deja abierta la ventana con `exec bash` (como -NoExit en
-/// PowerShell).
+/// Guion de bash que exporta las variables, entra en la carpeta, lanza el vigilante de Codex si
+/// `con_vigilante_de_codex`, ejecuta el programa con sus argumentos y, al terminar, deja abierta
+/// la ventana con `exec bash` (como -NoExit en PowerShell).
 pub(crate) fn guion_bash(
     variables: &[Asignacion<'_>],
     carpeta: &str,
     ejecutable: &str,
     argumentos: &[&str],
+    con_vigilante_de_codex: bool,
 ) -> String {
     let mut guion: String = variables
         .iter()
         .map(|v| format!("export {}='{}'; ", v.nombre, comilla_simple_bash(v.valor)))
         .collect();
     anadir_entre_comillas(&mut guion, "cd ", &comilla_simple_bash(carpeta), "; ");
+    if con_vigilante_de_codex {
+        guion.push_str(&vigilante_de_codex_bash());
+    }
     anadir_entre_comillas(&mut guion, "", &comilla_simple_bash(ejecutable), "");
     for argumento in argumentos {
         anadir_entre_comillas(&mut guion, " ", &comilla_simple_bash(argumento), "");

@@ -19,21 +19,19 @@ mod comun;
 
 use std::path::{Path, PathBuf};
 
-use comun::{guion_bash, guion_powershell, peticion, plan, textos, EntornoDeEnsayo};
+use comun::{guion_bash, guion_powershell, peticion, plan, textos, EntornoDeEnsayo, PROYECTO_AGY};
 use lanzador::{ErrorDeLanzamiento, Herramienta, PlanDeLanzamiento, Sistema};
 
 /// Parte fija del guion de PowerShell, igual que en el de Claude: título y temporizador que lo
 /// restaura.
 fn cabecera_powershell(titulo: &str) -> String {
     format!(
-        "$t = '{titulo}'; [Console]::Title = $t; \
-         $cb = [System.Threading.TimerCallback]{{param($s) [Console]::Title = $s}}; \
-         $tmr = New-Object System.Threading.Timer($cb, $t, 0, 1000)"
+        "$t = '{titulo}'; [Console]::Title = $t; Add-Type -TypeDefinition 'public static class GestorAgentesTitulo {{ static System.Threading.Timer reloj; public static void Fijar(string titulo) {{ reloj = new System.Threading.Timer(estado => System.Console.Title = titulo, null, 0, 1000); }} public static void Parar() {{ if (reloj != null) {{ reloj.Dispose(); }} }} }}'; [GestorAgentesTitulo]::Fijar($t)"
     )
 }
 
 /// Final fijo del guion de PowerShell.
-const FINAL_POWERSHELL: &str = "$tmr.Dispose(); [Console]::Title = $t";
+const FINAL_POWERSHELL: &str = "[GestorAgentesTitulo]::Parar(); [Console]::Title = $t";
 
 fn texto(ruta: &Path) -> &str {
     ruta.to_str().unwrap()
@@ -66,6 +64,17 @@ fn peticion_codex() -> lanzador::PeticionDeLanzamiento {
     p
 }
 
+/// Opciones `-c` con las variables de las órdenes de Codex 2 en /proyectos/Demo, tal como quedan
+/// en el guion de PowerShell: el valor TOML va entre comillas simples, que PowerShell duplica.
+const VARIABLES_CODEX_POWERSHELL: &str =
+    "'-c' 'shell_environment_policy.set.GESTOR_AGENTE=''Codex 2''' \
+     '-c' 'shell_environment_policy.set.GESTOR_PROYECTO=''/proyectos/Demo'''";
+
+/// Las mismas opciones en el guion de bash, donde cada comilla simple se escribe `'\''`.
+const VARIABLES_CODEX_BASH: &str =
+    "'-c' 'shell_environment_policy.set.GESTOR_AGENTE='\\''Codex 2'\\''' \
+     '-c' 'shell_environment_policy.set.GESTOR_PROYECTO='\\''/proyectos/Demo'\\'''";
+
 #[test]
 fn codex_terminal_en_windows_abre_powershell_con_identidad_codex_home_y_argumentos() {
     let codex = PathBuf::from(r"C:\bin").join("codex.exe");
@@ -75,9 +84,11 @@ fn codex_terminal_en_windows_abre_powershell_con_identidad_codex_home_y_argument
     let p = peticion_codex();
     let plan = plan(&p, Sistema::Windows, &entorno);
     let esperado = format!(
-        "{}; $env:GESTOR_AGENTE = 'Codex 2'; $env:CODEX_HOME = '/cfg/codex2'; \
+        "{}; $env:GESTOR_AGENTE = 'Codex 2'; $env:GESTOR_PROYECTO = '/proyectos/Demo'; $env:CODEX_HOME = '/cfg/codex2'; \
          Set-Location -LiteralPath '/proyectos/Demo'; \
-         & '{}' '-c' 'project_doc_max_bytes=65536'; {FINAL_POWERSHELL}",
+         if (Test-Path -LiteralPath '.gestor\\vigilante\\gestor-vigilante.exe') {{ Start-Process -FilePath '.gestor\\vigilante\\gestor-vigilante.exe' -ArgumentList \"--persistente --entrega codex --desde-terminal $PID\" -WindowStyle Hidden }}; \
+         & '{}' {VARIABLES_CODEX_POWERSHELL} '-c' 'project_doc_max_bytes=65536' '-s' 'workspace-write' '-a' 'never' '-c' 'sandbox_workspace_write.network_access=true' '-c' 'features.prefer_mxc=true'; \
+         {FINAL_POWERSHELL}",
         cabecera_powershell("Codex 2 · Demo"),
         texto(&codex)
     );
@@ -101,8 +112,10 @@ fn codex_terminal_en_linux_va_en_el_emulador_con_identidad_codex_home_y_argument
     assert_eq!(
         guion_bash(&plan),
         format!(
-            "export GESTOR_AGENTE='Codex 2'; export CODEX_HOME='/cfg/codex2'; \
-             cd '/proyectos/Demo'; '{}' '-c' 'project_doc_max_bytes=65536'; exec bash",
+            "export GESTOR_AGENTE='Codex 2'; export GESTOR_PROYECTO='/proyectos/Demo'; export CODEX_HOME='/cfg/codex2'; \
+             cd '/proyectos/Demo'; if [ -x '.gestor/vigilante/gestor-vigilante' ]; then '.gestor/vigilante/gestor-vigilante' --persistente --entrega codex --desde-terminal $$ >/dev/null 2>&1 & fi; \
+             '{}' {VARIABLES_CODEX_BASH} '-c' 'project_doc_max_bytes=65536' \
+             '-s' 'workspace-write' '-a' 'never' '-c' 'sandbox_workspace_write.network_access=true'; exec bash",
             texto(&codex)
         )
     );
@@ -200,8 +213,9 @@ fn gemini_terminal_en_windows_abre_agy_con_identidad_y_argumentos_sin_otras_vari
     let p = peticion_agy();
     let plan = plan(&p, Sistema::Windows, &entorno);
     let esperado = format!(
-        "{}; $env:GESTOR_AGENTE = 'Gemini 1'; Set-Location -LiteralPath '/proyectos/Demo'; \
-         & '{}' '--model' 'modelo-de-prueba' '--effort' 'high'; {FINAL_POWERSHELL}",
+        "{}; $env:GESTOR_AGENTE = 'Gemini 1'; $env:GESTOR_PROYECTO = '/proyectos/Demo'; Set-Location -LiteralPath '/proyectos/Demo'; \
+         & '{}' '--project' '{PROYECTO_AGY}' '--model' 'modelo-de-prueba' '--effort' 'high'; \
+         {FINAL_POWERSHELL}",
         cabecera_powershell("Gemini 1 · Demo"),
         texto(&agy)
     );
@@ -241,12 +255,79 @@ fn gemini_terminal_en_linux_busca_agy_en_local_bin() {
     assert_eq!(
         guion_bash(&plan),
         format!(
-            "export GESTOR_AGENTE='Gemini 1'; cd '/proyectos/Demo'; \
-             '{}' '--model' 'modelo-de-prueba' '--effort' 'high'; exec bash",
+            "export GESTOR_AGENTE='Gemini 1'; export GESTOR_PROYECTO='/proyectos/Demo'; cd '/proyectos/Demo'; \
+             '{}' '--project' '{PROYECTO_AGY}' '--model' 'modelo-de-prueba' '--effort' 'high'; \
+             exec bash",
             texto(&agy)
         )
     );
     es_de_terminal(&plan, &p.carpeta_proyecto);
+}
+
+#[test]
+fn codex_no_recibe_permisos_si_el_perfil_ya_fija_sandbox_o_aprobacion() {
+    let codex = PathBuf::from("/bin").join("codex");
+    let entorno = EntornoDeEnsayo::default()
+        .con_path("/bin")
+        .con_archivo(codex);
+    for fijado in [
+        vec!["-s", "read-only"],
+        vec!["--sandbox=danger-full-access"],
+        vec!["-a", "never"],
+        vec!["--ask-for-approval", "on-request"],
+        vec!["--approve-for-me"],
+        vec!["--dangerously-bypass-approvals-and-sandbox"],
+        vec!["-c", "approval_policy=\"on-request\""],
+        vec!["-c", "sandbox_mode=\"read-only\""],
+        vec!["--config", "sandbox_workspace_write.network_access=false"],
+        vec!["-c", "features.prefer_mxc=false"],
+        vec!["-c", "windows.sandbox=\"elevated\""],
+    ] {
+        let mut p = peticion_codex();
+        p.argumentos_extra = fijado.iter().map(|a| (*a).to_owned()).collect();
+        let guion = guion_bash(&plan(&p, Sistema::Linux, &entorno));
+        assert!(!guion.contains("'workspace-write'"), "{fijado:?}: {guion}");
+        assert!(
+            !guion.contains("'never'") || fijado.contains(&"never"),
+            "{fijado:?}: {guion}"
+        );
+        assert!(
+            !guion.contains("network_access=true"),
+            "{fijado:?}: {guion}"
+        );
+    }
+    // Un -c que no toca los permisos no los impide.
+    let p = peticion_codex();
+    assert!(guion_bash(&plan(&p, Sistema::Linux, &entorno)).contains(
+        "'-s' 'workspace-write' '-a' 'never' '-c' 'sandbox_workspace_write.network_access=true'"
+    ));
+}
+
+#[test]
+fn gemini_terminal_sin_proyecto_de_agy_para_la_carpeta_lo_crea() {
+    let agy = agy_de_localappdata();
+    let mut entorno = EntornoDeEnsayo::default().con_archivo(agy);
+    entorno.datos_locales = Some(PathBuf::from(r"C:\Users\u\AppData\Local"));
+    entorno.sin_proyecto_agy = true;
+    let p = peticion_agy();
+    let guion = guion_powershell(&plan(&p, Sistema::Windows, &entorno));
+    assert!(guion.contains("'--new-project'"), "{guion}");
+    assert!(!guion.contains("'--project'"), "{guion}");
+}
+
+#[test]
+fn gemini_terminal_con_los_proyectos_de_agy_ilegibles_no_se_lanza() {
+    let agy = agy_de_localappdata();
+    let mut entorno = EntornoDeEnsayo::default().con_archivo(agy);
+    entorno.datos_locales = Some(PathBuf::from(r"C:\Users\u\AppData\Local"));
+    entorno.proyectos_agy_ilegibles = true;
+    let p = peticion_agy();
+    match lanzador::planificar(&p, Sistema::Windows, &entorno) {
+        Err(ErrorDeLanzamiento::SinProyectoDeAgy { carpeta }) => {
+            assert_eq!(carpeta, p.carpeta_proyecto);
+        }
+        otro => panic!("se esperaba SinProyectoDeAgy y se obtuvo {otro:?}"),
+    }
 }
 
 #[test]
@@ -343,4 +424,67 @@ fn programator_en_linux_sigue_exigiendo_su_ejecutable() {
         matches!(resultado, Err(ErrorDeLanzamiento::PerfilIncompleto { .. })),
         "{resultado:?}"
     );
+}
+
+#[test]
+fn solo_la_terminal_de_codex_lanza_el_vigilante_persistente() {
+    let entorno = EntornoDeEnsayo::default().con_archivo(PathBuf::from("/bin/codex"));
+    let mut codex = peticion_codex();
+    codex.ejecutable = Some(PathBuf::from("/bin/codex"));
+    for sistema in [Sistema::Windows, Sistema::Linux] {
+        let plan_codex = plan(&codex, sistema, &entorno);
+        let guion = match sistema {
+            Sistema::Windows => guion_powershell(&plan_codex),
+            Sistema::Linux => guion_bash(&plan_codex),
+        };
+        assert_eq!(
+            guion
+                .matches("--persistente --entrega codex --desde-terminal")
+                .count(),
+            1,
+            "{guion}"
+        );
+        // El vigilante va antes de abrir Codex, para que lo encuentre al arrancar.
+        assert!(
+            guion.find("--desde-terminal") < guion.find("/bin/codex"),
+            "{guion}"
+        );
+    }
+    for herramienta in [Herramienta::Claude] {
+        let mut otra = peticion_codex();
+        otra.herramienta = herramienta;
+        otra.ejecutable = Some(PathBuf::from("/bin/codex"));
+        for sistema in [Sistema::Windows, Sistema::Linux] {
+            let plan_otra = plan(&otra, sistema, &entorno);
+            let guion = match sistema {
+                Sistema::Windows => guion_powershell(&plan_otra),
+                Sistema::Linux => guion_bash(&plan_otra),
+            };
+            assert!(
+                !guion.contains("gestor-vigilante"),
+                "{herramienta:?}: {guion}"
+            );
+        }
+    }
+}
+
+#[test]
+fn el_titulo_no_se_restaura_con_un_bloque_de_powershell_en_otro_hilo() {
+    // Un bloque de PowerShell como TimerCallback tumbaba powershell.exe a los dos segundos
+    // (PSInvalidOperation en ScriptBlock.GetContextFromTLS).
+    let entorno = EntornoDeEnsayo::default().con_archivo(PathBuf::from("/bin/codex"));
+    let mut p = peticion_codex();
+    p.ejecutable = Some(PathBuf::from("/bin/codex"));
+    let guion = guion_powershell(&plan(&p, Sistema::Windows, &entorno));
+    assert!(!guion.contains("TimerCallback"), "{guion}");
+    assert!(!guion.contains("]{"), "{guion}");
+    assert!(guion.contains("Add-Type -TypeDefinition 'public static class GestorAgentesTitulo"));
+    let fijar = guion
+        .find("[GestorAgentesTitulo]::Fijar($t)")
+        .expect("fija el título");
+    let parar = guion
+        .find("[GestorAgentesTitulo]::Parar()")
+        .expect("para el temporizador");
+    let programa = guion.find("/bin/codex").expect("abre el programa");
+    assert!(fijar < programa && programa < parar, "{guion}");
 }

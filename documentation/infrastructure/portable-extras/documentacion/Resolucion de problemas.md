@@ -66,12 +66,18 @@ La aplicación manda a Claude Code, Codex y agy un primer mensaje que les pide h
 
 El agente me pregunta su papel cada vez que lo abro
 
-El agente busca su papel en el estado del proyecto, en el apartado Papeles, y solo pregunta si no lo encuentra. Si te lo pregunta cada vez, es que no lo anotó después de tu respuesta, o que lo anotó con otro nombre. Pídele que lo escriba en ese apartado con su identidad, por ejemplo Claude 2, y que te lo confirme.
+El agente busca su papel en el estado del proyecto, en el apartado Papeles, y solo pregunta si no lo encuentra. Si te lo pregunta cada vez, es que no lo anotó después de tu respuesta, o que lo anotó con otro nombre. Pídele que lo escriba en ese apartado con su identidad, por ejemplo Claude 2, y que te lo confirme. También puedes elegirlo tú en la ventana antes de abrirlo, en la línea Papel del agente que abras, encima de los botones: la aplicación lo anota por él. Esa elección vale para una sola apertura.
 
 
 Un agente no se entera de los mensajes de los demás
 
-Depende de la herramienta. Claude Code deja un vigilante en segundo plano que lo avisa en cuanto otro escribe; si ha dejado de avisar, es que se le ha caducado y no lo ha vuelto a armar: pídele que lo arme otra vez. agy deja en segundo plano un vigilante que lo despierta con el primer encargo para él; si ha dejado de enterarse, es que no lo ha vuelto a lanzar después de atender el último: pídele que lo lance otra vez. Codex se monta él mismo su sistema de vigilancia al arrancar. Si no lo han conseguido, miran el canal al terminar cada paso y lo dicen en su bandeja; entonces, si están parados esperando, no se enterarán hasta que les escribas: basta con decirles que miren el canal. Recuerda también que un mensaje solo es un encargo si empieza diciendo a quién va, por ejemplo Para Codex 1.
+Cada agente se entera por su vigilante, el programa gestor-vigilante que la aplicación deja en la carpeta .gestor/vigilante del proyecto. Mira primero la línea del equipo: si junto al agente dice vigila, su vigilante está en marcha; si dice VIGILANTE CAÍDO, se cerró sin terminar bien; y si dice que tiene encargos sin RECIBIDO, le han llegado encargos que todavía no ha acusado.
+
+Claude Code y agy dejan el vigilante en segundo plano, y este los despierta con el primer encargo para ellos; si han dejado de enterarse, es que no lo han vuelto a lanzar después de atender el último: pídeles que lo lancen otra vez. Codex lo lanza una sola vez al arrancar y el vigilante le entrega cada aviso dentro de su sesión; si ha dejado de enterarse, pídele que lo vuelva a lanzar. Si no lo han conseguido, miran el canal al terminar cada paso y lo dicen en su bandeja; entonces, si están parados esperando, no se enterarán hasta que les escribas: basta con decirles que miren el canal.
+
+Si la sesión del agente se abrió con una versión de Gestor Agentes anterior a la 3.6.0, sigue buscando el vigilante antiguo, que la aplicación ya ha retirado: ciérrala del todo y vuelve a abrir el agente desde la aplicación. Y si la preparación avisa de que no se ha encontrado gestor-vigilante junto a Gestor Agentes, falta ese programa en la carpeta de la aplicación: descarga de nuevo el paquete completo.
+
+Recuerda también que un mensaje solo es un encargo si dice a quién va con la palabra Para, por ejemplo Para Codex 1, Para Codex o Para Claude 2 y Codex 1.
 
 
 No aparece la línea del equipo al seleccionar un proyecto
@@ -86,7 +92,7 @@ Son avisos sobre el equipo de agentes del proyecto, no fallos de la aplicación.
 
 Sale una ventana titulada Actualización disponible
 
-La aplicación mira al arrancar si hay en GitHub una versión más nueva que la tuya, y te avisa si la hay. La ventana dice cuál es la nueva, cuál tienes y la dirección de la página donde se descarga. Descarga allí el paquete de tu sistema, descomprímelo y sustituye el programa y la carpeta documentacion, pero conserva tu carpeta datos, que guarda tu lista de proyectos y tus perfiles. La aplicación no descarga ni instala nada por su cuenta. Si no quieres que lo mire, abre datos\ajustes.json con un editor de texto y pon ComprobarActualizaciones en false.
+La aplicación mira al arrancar si hay en GitHub una versión más nueva que la tuya, y te avisa si la hay. La ventana dice cuál es la nueva, cuál tienes y la dirección de la página donde se descarga. Descarga allí el paquete de tu sistema, descomprímelo y sustituye los dos programas, gestor-agentes y gestor-vigilante, y la carpeta documentacion, pero conserva tu carpeta datos, que guarda tu lista de proyectos y tus perfiles. La aplicación no descarga ni instala nada por su cuenta. Si no quieres que lo mire, abre datos\ajustes.json con un editor de texto y pon ComprobarActualizaciones en false.
 
 
 Hay una versión nueva pero no me sale el aviso
@@ -107,6 +113,21 @@ El programa del agente estaba cuando arrancó Gestor Agentes, pero ya no está d
 Al pulsar un botón sale una ventana titulada Perfil incompleto
 
 Al perfil de ese agente le falta un dato imprescindible. Casi siempre es la ruta de Programator, que no se busca solo. Escríbela en la pestaña Agentes y pulsa Guardar rutas. La ventana dice también en qué archivo de la carpeta datos está el perfil, por si prefieres corregirlo a mano.
+
+
+Al abrir Gemini dice que no se pueden leer los proyectos de Antigravity
+
+La aplicación abre agy dentro del proyecto de Antigravity que tiene la carpeta del proyecto, para que no trabaje en otro, y si no hay ninguno le pide a agy que lo cree. Para saberlo lee los proyectos que Antigravity guarda en la carpeta .gemini/config/projects de tu carpeta personal. Si no entiende ninguno, porque no hay o porque una versión nueva de agy los guarda de otra forma, no abre agy. Abre una vez esa carpeta como proyecto en Antigravity y vuelve a pulsar el botón.
+
+
+El agente dice que no está en la carpeta del proyecto y se para
+
+Al arrancar, cada agente compara la carpeta en la que está con la del proyecto, que la aplicación le da en la variable GESTOR_PROYECTO. Si no coinciden, para sin leer ni escribir nada y te dice las dos rutas, para no trabajar en un proyecto ajeno. Cierra esa ventana y vuelve a abrir el agente desde la aplicación.
+
+
+El agente dice que no lo ha lanzado Gestor Agentes
+
+Un agente que abres por tu cuenta, sin la aplicación, no recibe identidad, así que no hace el arranque del equipo ni escribe en la carpeta .gestor, y solo atiende lo que le pidas. Si quieres que trabaje con los demás, ábrelo desde el botón de la aplicación.
 
 
 Las instrucciones de un proyecto no incluyen las normas de mi equipo

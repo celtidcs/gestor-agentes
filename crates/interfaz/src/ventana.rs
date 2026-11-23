@@ -5,9 +5,12 @@ use std::sync::mpsc::Receiver;
 
 use eframe::egui::{self, Color32, RichText};
 use nucleo::actualizaciones::Publicacion;
+use nucleo::configuracion::HerramientaDelPerfil;
+use nucleo::proyecto::papeles::Papel;
 
 use crate::actualizaciones::VERSION_INSTALADA;
 use crate::aplicacion::Aplicacion;
+use crate::perfiles::CarpetaDelAgente;
 use crate::tema;
 use crate::textos;
 use crate::trabajos::{Trabajador, Trabajo};
@@ -35,6 +38,8 @@ enum Orden {
     BusquedaAutomatica(usize),
     GuardarRutas,
     BuscarDeNuevo,
+    AnadirCuenta(HerramientaDelPerfil),
+    ElegirPapel(Option<Papel>),
 }
 
 /// Ventana de Gestor Agentes.
@@ -45,6 +50,8 @@ pub struct Ventana {
     pestana: Pestana,
     /// Por donde llega, una vez, la versión nueva publicada, si la hay.
     avisos_de_version: Option<Receiver<Publicacion>>,
+    /// Por donde llega, una vez, la última versión publicada de Programator (F7).
+    avisos_de_programator: Option<Receiver<Publicacion>>,
 }
 
 impl Ventana {
@@ -58,6 +65,7 @@ impl Ventana {
             nucleo_comun,
             pestana: Pestana::Proyectos,
             avisos_de_version: None,
+            avisos_de_programator: None,
         };
         if let Some(trabajo) = ventana.aplicacion.detectar() {
             ventana.encargar(trabajo);
@@ -71,6 +79,29 @@ impl Ventana {
     pub fn con_avisos_de_version(mut self, avisos: Receiver<Publicacion>) -> Self {
         self.avisos_de_version = Some(avisos);
         self
+    }
+
+    /// Recibe por `avisos` la última versión publicada de Programator, para compararla con la del
+    /// Programator de cada perfil.
+    #[must_use]
+    pub fn con_avisos_de_programator(mut self, avisos: Receiver<Publicacion>) -> Self {
+        self.avisos_de_programator = Some(avisos);
+        self
+    }
+
+    /// Pasa a la aplicación la última versión de Programator, si ha llegado. Solo llega una.
+    fn recoger_version_de_programator(&mut self) {
+        let Some(avisos) = &self.avisos_de_programator else {
+            return;
+        };
+        match avisos.try_recv() {
+            Ok(publicacion) => {
+                self.aplicacion.fijar_programator_publicado(publicacion);
+                self.avisos_de_programator = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.avisos_de_programator = None,
+        }
     }
 
     /// Pasa a la cola de diálogos el aviso de versión nueva, si ha llegado. Solo llega uno: al
@@ -124,6 +155,11 @@ impl Ventana {
             }
             Orden::GuardarRutas => self.aplicacion.guardar_rutas(),
             Orden::BuscarDeNuevo => self.aplicacion.detectar(),
+            Orden::AnadirCuenta(herramienta) => self.aplicacion.pedir_cuenta(herramienta),
+            Orden::ElegirPapel(papel) => {
+                self.aplicacion.elegir_papel(papel);
+                None
+            }
         };
         if let Some(trabajo) = trabajo {
             self.encargar(trabajo);
@@ -190,6 +226,27 @@ impl Ventana {
                 );
                 ui.add_space(8.0);
             }
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(textos::ETIQUETA_PAPEL)
+                        .size(tema::TAMANO_PEQUENO)
+                        .color(tema::TEXTO_SECUNDARIO),
+                );
+                let actual = self.aplicacion.papel();
+                for (papel, texto) in [
+                    (None, textos::PAPEL_SIN_ELEGIR),
+                    (Some(Papel::Jefe), textos::PAPEL_JEFE),
+                    (Some(Papel::Ayudante), textos::PAPEL_AYUDANTE),
+                ] {
+                    if ui
+                        .add_enabled(acciones, egui::RadioButton::new(actual == papel, texto))
+                        .clicked()
+                    {
+                        ordenes.push(Orden::ElegirPapel(papel));
+                    }
+                }
+            });
+            ui.add_space(8.0);
             ui.horizontal_wrapped(|ui| {
                 if boton(ui, textos::BOTON_AGREGAR, tema::MORADO, edicion) {
                     ordenes.push(Orden::Agregar);
@@ -287,6 +344,20 @@ impl Ventana {
             if boton(ui, textos::BOTON_BUSCAR_DE_NUEVO, tema::VERDE, edicion) {
                 ordenes.push(Orden::BuscarDeNuevo);
             }
+            if boton(ui, textos::BOTON_CUENTA_CLAUDE, tema::VERDE, edicion) {
+                ordenes.push(Orden::AnadirCuenta(HerramientaDelPerfil::Claude));
+            }
+            if boton(ui, textos::BOTON_CUENTA_CODEX, tema::VERDE, edicion) {
+                ordenes.push(Orden::AnadirCuenta(HerramientaDelPerfil::Codex));
+            }
+            if self.aplicacion.buscando_agentes() {
+                ui.spinner();
+                ui.label(
+                    RichText::new(textos::BUSCANDO_AGENTES)
+                        .size(tema::TAMANO_PEQUENO)
+                        .color(tema::TEXTO_SECUNDARIO),
+                );
+            }
         });
         ui.add_space(8.0);
         egui::Frame::new()
@@ -317,9 +388,24 @@ impl Ventana {
         ui.end_row();
 
         for (indice, perfil) in self.aplicacion.perfiles().iter().enumerate() {
-            ui.label(RichText::new(perfil.nombre()).size(tema::TAMANO_TEXTO));
-            ui.label(textos::disponibilidad(
-                self.aplicacion.disponibilidad(indice),
+            let estado = self.aplicacion.estado_del_agente(indice);
+            egui::Frame::new()
+                .fill(tema::color_de_estado(estado))
+                .inner_margin(tema::MARGEN_CELDA_DE_AGENTE)
+                .corner_radius(tema::RADIO_CELDA_DE_AGENTE)
+                .show(ui, |ui| {
+                    ui.label(
+                        RichText::new(perfil.nombre())
+                            .size(tema::TAMANO_TEXTO)
+                            .strong()
+                            .color(tema::FONDO),
+                    );
+                });
+            let carpeta = self.aplicacion.carpeta_del_agente(indice);
+            ui.label(textos::con_version(
+                textos::estado_de_agente(estado, self.aplicacion.disponibilidad(indice), carpeta),
+                carpeta.and_then(CarpetaDelAgente::version),
+                self.aplicacion.version_mas_nueva(indice),
             ));
             let mut ruta = self.aplicacion.ruta_editada(indice).to_owned();
             let campo = egui::TextEdit::singleline(&mut ruta).desired_width(tema::ANCHO_RUTA);
@@ -431,6 +517,7 @@ fn boton(ui: &mut egui::Ui, texto: &str, color: Color32, activo: bool) -> bool {
 impl eframe::App for Ventana {
     fn logic(&mut self, _contexto: &egui::Context, _marco: &mut eframe::Frame) {
         self.recoger_aviso_de_version();
+        self.recoger_version_de_programator();
         loop {
             match self.trabajador.recoger() {
                 Ok(Some(resultado)) => self.aplicacion.terminar(resultado),

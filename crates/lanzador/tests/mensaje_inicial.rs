@@ -9,7 +9,7 @@ mod comun;
 
 use std::path::PathBuf;
 
-use comun::{con_su_ejecutable, guion_bash, guion_powershell, peticion, plan};
+use comun::{con_su_ejecutable, guion_bash, guion_powershell, peticion, plan, PROYECTO_AGY};
 use lanzador::{Herramienta, PeticionDeLanzamiento, Sistema};
 
 /// Mensaje de ejemplo, con tildes, para comprobar que llega como un solo argumento.
@@ -50,7 +50,12 @@ fn codex_recibe_el_mensaje_despues_de_los_argumentos_del_perfil() {
     let p = con_argumentos_del_perfil(peticion_con(Herramienta::Codex, Some(MENSAJE)));
     assert_eq!(
         orden_bash(&p),
-        format!("'{PROGRAMA}' '--model' 'm1' '{MENSAJE}'")
+        format!(
+            "'{PROGRAMA}' \
+             '-c' 'shell_environment_policy.set.GESTOR_AGENTE='\\''Claude 2'\\''' \
+             '-c' 'shell_environment_policy.set.GESTOR_PROYECTO='\\''/proyectos/Demo'\\''' \
+             '--model' 'm1' '-s' 'workspace-write' '-a' 'never' '-c' 'sandbox_workspace_write.network_access=true' '{MENSAJE}'"
+        )
     );
 }
 
@@ -59,7 +64,7 @@ fn agy_recibe_el_mensaje_con_la_opcion_interactiva() {
     let p = con_argumentos_del_perfil(peticion_con(Herramienta::Gemini, Some(MENSAJE)));
     assert_eq!(
         orden_bash(&p),
-        format!("'{PROGRAMA}' '--model' 'm1' '-i' '{MENSAJE}'")
+        format!("'{PROGRAMA}' '--project' '{PROYECTO_AGY}' '--model' 'm1' '-i' '{MENSAJE}'")
     );
 }
 
@@ -75,7 +80,7 @@ fn sin_mensaje_o_en_blanco_la_orden_es_la_de_antes() {
                 Herramienta::Gemini,
                 mensaje
             ))),
-            format!("'{PROGRAMA}' '--model' 'm1'")
+            format!("'{PROGRAMA}' '--project' '{PROYECTO_AGY}' '--model' 'm1'")
         );
     }
 }

@@ -107,8 +107,14 @@ fn las_carpetas_con_nombre_parecido_no_cuentan() {
     assert!(perfiles.is_empty(), "{perfiles:?}");
 }
 
+/// Lista guardada de quien tiene dos cuentas de Claude: la inicial más Claude 2.
 fn guardados() -> Vec<PerfilDeAgente> {
-    PerfilDeAgente::por_defecto()
+    let mut perfiles = PerfilDeAgente::por_defecto();
+    perfiles.insert(
+        1,
+        PerfilDeAgente::new(HerramientaDelPerfil::Claude, 2).con_directorio("~/.claude2"),
+    );
+    perfiles
 }
 
 #[test]

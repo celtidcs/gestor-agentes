@@ -141,6 +141,9 @@ pub const CAMBIO_RESPALDADO: &str = "respaldado";
 /// Cambio: repositorio git creado.
 pub const CAMBIO_REPOSITORIO_CREADO: &str = "repositorio git creado";
 
+/// Descripción de un cambio: se ha borrado algo que ya no se usa.
+pub const CAMBIO_BORRADO: &str = "borrado, porque ya no se usa";
+
 // Informe de preparación: git.
 
 /// Error de git init.
@@ -248,5 +251,30 @@ pub fn movido_al_archivo(destino: &str) -> String {
 pub fn registro_ilegible(registro: &str, motivo: &str) -> String {
     format!(
         "{registro} no se ha podido leer ({motivo}); se reconstruye, y los archivos que Gestor Agentes escribe enteros se respaldarán antes de sustituirse si no coinciden con su texto vigente."
+    )
+}
+
+/// Aviso: Gestor Agentes no lleva a su lado el ejecutable del vigilante del canal.
+#[must_use]
+pub fn vigilante_sin_ejecutable(destino: &str) -> String {
+    format!(
+        "No se ha encontrado gestor-vigilante junto a Gestor Agentes, así que no se ha copiado {destino}: los agentes no tendrán vigilante del canal. Reinstala Gestor Agentes desde su paquete completo."
+    )
+}
+
+/// Aviso: se han anotado reglas candidatas a aprendizaje común.
+#[must_use]
+pub fn candidatas_recogidas(destino: &str) -> String {
+    format!(
+        "Se han anotado reglas candidatas a aprendizaje común en {destino}. El Director decide cuáles pasan a ficha."
+    )
+}
+
+/// Aviso: el código del proyecto cita los archivos de reglas que la aplicación reescribe.
+#[must_use]
+pub fn codigo_que_cita_las_reglas(archivos: &[String]) -> String {
+    format!(
+        "El código del proyecto cita AGENTS.md, CLAUDE.md o GEMINI.md en {}. Gestor Agentes reescribe esos archivos en cada lanzamiento: ninguna prueba ni programa del proyecto debe depender de su contenido.",
+        archivos.join(", ")
     )
 }
