@@ -65,30 +65,11 @@ use crate::textos;
 /// Marcador de la fecha en el encabezado del bloque pendiente de consolidar.
 const MARCADOR_FECHA: &str = "{{FECHA}}";
 
-/// Archivos del canal que no son la bandeja de nadie, en minúsculas: el estado común y los que
-/// Programator reserva en su propio canal (src/protocolo/canal.rs del proyecto Programator), entre
-/// ellos la guía COMO-ENCARGAR-A-PROGRAMATOR.md que publica al arrancar.
-pub const ARCHIVOS_DEL_CANAL_QUE_NO_SON_BANDEJAS: [&str; 4] = [
-    "estado.md",
-    "readme.md",
-    "indice.md",
-    "como-encargar-a-programator.md",
-];
+pub use canal::contrato::es_bandeja;
 
-/// Prefijos de los históricos que se guardan en el canal, con y sin tilde, como los reconoce
-/// Programator. Un histórico no es una bandeja viva.
-pub const PREFIJOS_DE_HISTORICO: [&str; 2] = ["historico-", "histórico-"];
-
-/// Indica si un archivo de .gestor/canal/ es la bandeja de un agente: un .md que no es uno de
-/// [`ARCHIVOS_DEL_CANAL_QUE_NO_SON_BANDEJAS`] ni un histórico. No distingue mayúsculas.
-#[must_use]
-pub fn es_bandeja(nombre: &str) -> bool {
-    let nombre = nombre.to_lowercase();
-    nombre.ends_with(".md")
-        && !ARCHIVOS_DEL_CANAL_QUE_NO_SON_BANDEJAS.contains(&nombre.as_str())
-        && !PREFIJOS_DE_HISTORICO
-            .iter()
-            .any(|prefijo| nombre.starts_with(prefijo))
+/// Ruta de estado.md, relativa al proyecto.
+fn ruta_del_estado() -> String {
+    canal::contrato::ruta_relativa_del_estado()
 }
 
 /// Configuración del usuario que necesita la inicialización.
@@ -169,21 +150,43 @@ impl<'a> InicializadorDeProyecto<'a> {
             .collect();
         identidades.extend(lanzada);
 
-        self.git.asegurar_repositorio(raiz, &mut informe);
-        paso(&mut informe, git::ARCHIVO_IGNORADOS, |informe| {
+        self.asegurar_git(raiz, &mut informe);
+        let mut registro = RegistroDeHuellas::cargar(raiz, &mut informe);
+        self.migrar_y_archivar(raiz, &identidades, momento, &mut registro, &mut informe);
+        self.recoger_aprendizaje(raiz, momento, &mut informe);
+        self.actualizar_archivos_gestionados(raiz, momento, &mut registro, &mut informe);
+        self.revisar_y_avisar(raiz, momento, &mut informe);
+        guardar_registros(raiz, &registro, momento, &mut informe);
+        informe
+    }
+
+    /// Repositorio git y .gitignore con .gestor/.
+    fn asegurar_git(&self, raiz: &Path, informe: &mut InformeDeInicializacion) {
+        self.git.asegurar_repositorio(raiz, informe);
+        paso(informe, git::ARCHIVO_IGNORADOS, |informe| {
             git::asegurar_ignorado(raiz, informe)
         });
+    }
 
-        let mut registro = RegistroDeHuellas::cargar(raiz, &mut informe);
+    /// Archiva el sistema de trabajo anterior, asegura la estructura de .gestor/ y estado.md, y crea
+    /// las instrucciones propias del proyecto con el texto propio recogido si faltan.
+    fn migrar_y_archivar(
+        &self,
+        raiz: &Path,
+        identidades: &[IdentidadAgente],
+        momento: Momento,
+        registro: &mut RegistroDeHuellas,
+        informe: &mut InformeDeInicializacion,
+    ) {
         let ruta_propio = archivos::ruta(raiz, catalogo::RUTA_INSTRUCCIONES_DEL_PROYECTO);
         let falta_el_propio = !ruta_propio.is_file();
         let propio = if falta_el_propio {
-            self.recoger_texto_propio(raiz, &mut informe)
+            self.recoger_texto_propio(raiz, informe)
         } else {
             TextoPropio::default()
         };
 
-        let archivados = con_valor(&mut informe, ".gestor/archivo/", |informe| {
+        let archivados = con_valor(informe, ".gestor/archivo/", |informe| {
             sistema_anterior::archivar(raiz, momento, informe)
         })
         .unwrap_or_default();
@@ -191,49 +194,69 @@ impl<'a> InicializadorDeProyecto<'a> {
             registro.olvidar(&archivado.origen);
         }
 
-        paso(&mut informe, ".gestor/", |informe| {
-            estructura::asegurar(raiz, &identidades, informe)
+        paso(informe, ".gestor/", |informe| {
+            estructura::asegurar(raiz, identidades, informe)
         });
-        paso(&mut informe, ARCHIVO_DE_ESTADO_DEL_CANAL, |informe| {
+        paso(informe, &ruta_del_estado(), |informe| {
             papeles::completar_en_disco(raiz, informe)
         });
 
         if falta_el_propio {
             paso(
-                &mut informe,
+                informe,
                 catalogo::RUTA_INSTRUCCIONES_DEL_PROYECTO,
                 |informe| crear_propio(raiz, &propio, &archivados, momento, informe),
             );
         } else if !archivados.is_empty() {
             informe.anotar_aviso(aviso_de_archivados_sin_propio(&archivados));
         }
+        let archivo = if archivados.is_empty() {
+            ArchivoDelSistemaAnterior::SinNovedades
+        } else {
+            ArchivoDelSistemaAnterior::RecienArchivado
+        };
         paso(
-            &mut informe,
+            informe,
             sistema_anterior::CARPETA_ARCHIVO_SISTEMA_ANTERIOR,
-            |informe| seguir_el_legado(raiz, &mut registro, archivados.is_empty(), informe),
+            |informe| seguir_el_legado(raiz, registro, archivo, informe),
         );
+    }
 
+    /// Junta las reglas candidatas a aprendizaje común en la carpeta de datos, si la hay.
+    fn recoger_aprendizaje(
+        &self,
+        raiz: &Path,
+        momento: Momento,
+        informe: &mut InformeDeInicializacion,
+    ) {
         if let Some(datos) = self.configuracion.carpeta_de_datos() {
-            paso(
-                &mut informe,
-                aprendizaje::ARCHIVO_DE_CANDIDATAS,
-                |informe| recoger_candidatas(raiz, &datos, momento, informe),
-            );
+            paso(informe, aprendizaje::ARCHIVO_DE_CANDIDATAS, |informe| {
+                recoger_candidatas(raiz, &datos, momento, informe)
+            });
         }
+    }
 
+    /// Archivos que mantiene la aplicación: instrucciones, vigilante y permisos de Claude Code.
+    fn actualizar_archivos_gestionados(
+        &self,
+        raiz: &Path,
+        momento: Momento,
+        registro: &mut RegistroDeHuellas,
+        informe: &mut InformeDeInicializacion,
+    ) {
         let entorno = self.fuente_de_entorno.buscar(raiz);
         for archivo in catalogo::archivos_gestionados(entorno.as_ref()) {
-            paso(&mut informe, archivo.ruta_relativa, |informe| {
-                mantener_entero(raiz, &archivo, &mut registro, momento, informe)
+            paso(informe, archivo.ruta_relativa, |informe| {
+                mantener_entero(raiz, &archivo, registro, momento, informe)
             });
         }
 
         if let Some(origen) = self.configuracion.ejecutable_del_vigilante() {
-            paso(&mut informe, vigilante::CARPETA_DEL_VIGILANTE, |informe| {
+            paso(informe, vigilante::CARPETA_DEL_VIGILANTE, |informe| {
                 vigilante::instalar(raiz, &origen, informe)
             });
         }
-        let retirados = con_valor(&mut informe, vigilante::CARPETA_DEL_VIGILANTE, |informe| {
+        let retirados = con_valor(informe, vigilante::CARPETA_DEL_VIGILANTE, |informe| {
             vigilante::retirar_lo_anterior(raiz, informe)
         })
         .unwrap_or_default();
@@ -241,7 +264,7 @@ impl<'a> InicializadorDeProyecto<'a> {
             registro.olvidar(retirado);
         }
 
-        paso(&mut informe, permisos::ARCHIVO_DE_CLAUDE, |informe| {
+        paso(informe, permisos::ARCHIVO_DE_CLAUDE, |informe| {
             mantener_permisos(
                 raiz,
                 permisos::ARCHIVO_DE_CLAUDE,
@@ -249,8 +272,17 @@ impl<'a> InicializadorDeProyecto<'a> {
                 informe,
             )
         });
+    }
 
-        paso(&mut informe, ".", |informe| {
+    /// Avisos de lo que conviene revisar: código que cita las reglas, bandejas, diarios y estado
+    /// grandes, y lo que no cuadra en el canal.
+    fn revisar_y_avisar(
+        &self,
+        raiz: &Path,
+        momento: Momento,
+        informe: &mut InformeDeInicializacion,
+    ) {
+        paso(informe, ".", |informe| {
             let citas = citas_de_reglas::buscar(raiz)?;
             if !citas.is_empty() {
                 informe.anotar_aviso(textos::codigo_que_cita_las_reglas(&citas));
@@ -258,25 +290,17 @@ impl<'a> InicializadorDeProyecto<'a> {
             Ok(())
         });
 
-        paso(&mut informe, CARPETA_CANAL, |informe| {
-            avisar_bandejas_grandes(raiz, self.configuracion.limite_de_bandeja(), informe)
+        let limite_de_bandeja = self.configuracion.limite_de_bandeja();
+        paso(informe, CARPETA_CANAL, |informe| {
+            avisar_bandejas_grandes(raiz, limite_de_bandeja, informe)
         });
-        paso(&mut informe, CARPETA_GESTOR, |informe| {
-            avisar_diarios_y_estado_grandes(raiz, self.configuracion.limite_de_bandeja(), informe)
+        paso(informe, CARPETA_GESTOR, |informe| {
+            avisar_diarios_y_estado_grandes(raiz, limite_de_bandeja, informe)
         });
         let limite_de_latido = self.configuracion.limite_de_latido_horas();
-        paso(&mut informe, ARCHIVO_DE_ESTADO_DEL_CANAL, |informe| {
+        paso(informe, &ruta_del_estado(), |informe| {
             avisar_del_canal(raiz, momento, limite_de_latido, informe)
         });
-        paso(&mut informe, registro_de_huellas::RUTA_RELATIVA, |_| {
-            registro.guardar(raiz)
-        });
-        let avisos = informe.avisos().to_vec();
-        paso(&mut informe, avisos_de_preparacion::RUTA_RELATIVA, |_| {
-            avisos_de_preparacion::guardar(raiz, &avisos, momento)
-        });
-
-        informe
     }
 
     /// Lee los archivos de instrucciones anteriores que haya y recoge su texto propio. Un archivo
@@ -403,6 +427,15 @@ const CARPETAS_DEL_LEGADO: [&str; 2] = [
     sistema_anterior::CARPETA_ARCHIVO_GEMINI,
 ];
 
+/// Si la preparación en curso acaba de archivar algo del sistema de trabajo anterior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArchivoDelSistemaAnterior {
+    /// No ha archivado nada.
+    SinNovedades,
+    /// Acaba de archivar algo: no se borra nada en la misma preparación.
+    RecienArchivado,
+}
+
 /// Lleva la cuenta del bloque de legado. Mientras el archivo propio tenga el bloque, lo anota en el
 /// registro. Cuando un agente lo ha consolidado (el bloque ya no está) y la aplicación lo había
 /// anotado, borra las carpetas del archivo que dejó ella, como pide el método, porque el permiso
@@ -411,7 +444,7 @@ const CARPETAS_DEL_LEGADO: [&str; 2] = [
 fn seguir_el_legado(
     raiz: &Path,
     registro: &mut RegistroDeHuellas,
-    nada_archivado_ahora: bool,
+    archivo: ArchivoDelSistemaAnterior,
     informe: &mut InformeDeInicializacion,
 ) -> io::Result<()> {
     let ruta = archivos::ruta(raiz, catalogo::RUTA_INSTRUCCIONES_DEL_PROYECTO);
@@ -425,7 +458,7 @@ fn seguir_el_legado(
         registro.registrar_archivo(CLAVE_LEGADO_PENDIENTE, "pendiente");
         return Ok(());
     }
-    if !nada_archivado_ahora
+    if archivo == ArchivoDelSistemaAnterior::RecienArchivado
         || registro
             .huella_del_archivo(CLAVE_LEGADO_PENDIENTE)
             .is_none()
@@ -604,9 +637,9 @@ fn avisar_diarios_y_estado_grandes(
     informe: &mut InformeDeInicializacion,
 ) -> io::Result<()> {
     let mut leidas: Vec<(String, u64)> = Vec::new();
-    let estado = archivos::ruta(raiz, ARCHIVO_DE_ESTADO_DEL_CANAL);
+    let estado = archivos::ruta(raiz, &ruta_del_estado());
     if let Ok(datos) = fs::metadata(&estado) {
-        leidas.push((ARCHIVO_DE_ESTADO_DEL_CANAL.to_owned(), datos.len()));
+        leidas.push((ruta_del_estado(), datos.len()));
     }
     let entradas = match fs::read_dir(archivos::ruta(raiz, CARPETA_GESTOR)) {
         Ok(entradas) => entradas,
@@ -630,9 +663,6 @@ fn avisar_diarios_y_estado_grandes(
     Ok(())
 }
 
-/// Ruta del estado del canal dentro del proyecto.
-const ARCHIVO_DE_ESTADO_DEL_CANAL: &str = ".gestor/canal/estado.md";
-
 /// Revisa el estado del canal y las bandejas ([`revision_del_canal::revisar`]) y pone en el
 /// informe un aviso por cada cosa que no cuadra. Sin estado.md no hay nada que revisar.
 fn avisar_del_canal(
@@ -641,8 +671,7 @@ fn avisar_del_canal(
     limite_horas: u64,
     informe: &mut InformeDeInicializacion,
 ) -> io::Result<()> {
-    let Some((estado, _)) = archivos::leer(&archivos::ruta(raiz, ARCHIVO_DE_ESTADO_DEL_CANAL))?
-    else {
+    let Some((estado, _)) = archivos::leer(&archivos::ruta(raiz, &ruta_del_estado()))? else {
         return Ok(());
     };
     let Some(ahora) = momento.como_fecha_y_hora() else {
@@ -687,11 +716,11 @@ fn texto_del_aviso(aviso: &revision_del_canal::AvisoDelCanal, limite_horas: u64)
     use revision_del_canal::AvisoDelCanal;
     match aviso {
         AvisoDelCanal::FaltaApartado(apartado) => {
-            textos::estado_sin_apartado(ARCHIVO_DE_ESTADO_DEL_CANAL, apartado)
+            textos::estado_sin_apartado(&ruta_del_estado(), apartado)
         }
-        AvisoDelCanal::MutacionesVivas => textos::mutaciones_vivas(ARCHIVO_DE_ESTADO_DEL_CANAL),
+        AvisoDelCanal::MutacionesVivas => textos::mutaciones_vivas(&ruta_del_estado()),
         AvisoDelCanal::ReservaIlegible(linea) => {
-            textos::reserva_ilegible(ARCHIVO_DE_ESTADO_DEL_CANAL, linea)
+            textos::reserva_ilegible(&ruta_del_estado(), linea)
         }
         AvisoDelCanal::ReservaRepetida { ruta, agentes } => {
             textos::reserva_repetida(ruta, &agentes.0, &agentes.1)
@@ -724,4 +753,20 @@ fn con_valor<T>(
             None
         }
     }
+}
+
+/// Guarda el registro de huellas y los avisos de la preparación.
+fn guardar_registros(
+    raiz: &Path,
+    registro: &RegistroDeHuellas,
+    momento: Momento,
+    informe: &mut InformeDeInicializacion,
+) {
+    paso(informe, registro_de_huellas::RUTA_RELATIVA, |_| {
+        registro.guardar(raiz)
+    });
+    let avisos = informe.avisos().to_vec();
+    paso(informe, avisos_de_preparacion::RUTA_RELATIVA, |_| {
+        avisos_de_preparacion::guardar(raiz, &avisos, momento)
+    });
 }

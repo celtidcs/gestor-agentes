@@ -5,6 +5,7 @@
 //! dicen «Ninguna.», con o sin viñeta y con o sin una nota entre paréntesis delante, como
 //! «- (Añadido por Claude 1, 2026-11-18 13:18.) Ninguna.».
 
+use crate::apartados;
 use crate::huella;
 
 /// Título del apartado.
@@ -16,15 +17,7 @@ const VACIO: &str = "Ninguna";
 /// Líneas con contenido del apartado, sin espacios a los lados, o nada si no está.
 #[must_use]
 pub fn lineas(estado: &str) -> Option<Vec<&str>> {
-    let mut todas = estado.lines();
-    todas.find(|linea| linea.trim() == TITULO)?;
-    Some(
-        todas
-            .take_while(|linea| !linea.trim_start().starts_with('#'))
-            .map(str::trim)
-            .filter(|linea| !linea.is_empty())
-            .collect(),
-    )
+    apartados::lineas(estado, TITULO)
 }
 
 /// Si hay alguna mutación viva: el apartado existe y alguna línea no es la de vacío.

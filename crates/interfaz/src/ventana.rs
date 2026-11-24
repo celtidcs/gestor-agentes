@@ -1,15 +1,12 @@
 //! Ventana principal. Solo pinta el estado de [`Aplicacion`] y le pasa cada clic; las reglas
 //! viven allí y los trabajos largos en el [`Trabajador`].
 
-use std::sync::mpsc::Receiver;
-
 use eframe::egui::{self, Color32, RichText};
-use nucleo::actualizaciones::Publicacion;
 use nucleo::configuracion::HerramientaDelPerfil;
 use nucleo::proyecto::papeles::Papel;
 
-use crate::actualizaciones::VERSION_INSTALADA;
-use crate::aplicacion::Aplicacion;
+use crate::aplicacion::{Aplicacion, RespuestaDeDialogo};
+use crate::aviso_de_version::{AvisosAlArrancar, VERSION_INSTALADA};
 use crate::perfiles::CarpetaDelAgente;
 use crate::tema;
 use crate::textos;
@@ -32,7 +29,7 @@ enum Orden {
     Agregar,
     AbrirCon(usize),
     Borrar,
-    CerrarDialogo(bool),
+    CerrarDialogo(RespuestaDeDialogo),
     EditarRuta(usize, String),
     Examinar(usize),
     BusquedaAutomatica(usize),
@@ -48,10 +45,8 @@ pub struct Ventana {
     trabajador: Trabajador,
     nucleo_comun: String,
     pestana: Pestana,
-    /// Por donde llega, una vez, la versión nueva publicada, si la hay.
-    avisos_de_version: Option<Receiver<Publicacion>>,
-    /// Por donde llega, una vez, la última versión publicada de Programator (F7).
-    avisos_de_programator: Option<Receiver<Publicacion>>,
+    /// Lo que llega, una vez, de las comprobaciones de versión del arranque.
+    avisos: AvisosAlArrancar,
 }
 
 impl Ventana {
@@ -64,8 +59,7 @@ impl Ventana {
             trabajador,
             nucleo_comun,
             pestana: Pestana::Proyectos,
-            avisos_de_version: None,
-            avisos_de_programator: None,
+            avisos: AvisosAlArrancar::ninguno(),
         };
         if let Some(trabajo) = ventana.aplicacion.detectar() {
             ventana.encargar(trabajo);
@@ -73,58 +67,12 @@ impl Ventana {
         ventana
     }
 
-    /// Recibe por `avisos` la versión nueva, si la consulta de arranque la encuentra, para
-    /// avisar de ella con un diálogo.
+    /// Recibe lo que den las comprobaciones de versión del arranque: el aviso de versión
+    /// nueva, que se enseña con un diálogo, y la última versión de Programator.
     #[must_use]
-    pub fn con_avisos_de_version(mut self, avisos: Receiver<Publicacion>) -> Self {
-        self.avisos_de_version = Some(avisos);
+    pub fn con_avisos(mut self, avisos: AvisosAlArrancar) -> Self {
+        self.avisos = avisos;
         self
-    }
-
-    /// Recibe por `avisos` la última versión publicada de Programator, para compararla con la del
-    /// Programator de cada perfil.
-    #[must_use]
-    pub fn con_avisos_de_programator(mut self, avisos: Receiver<Publicacion>) -> Self {
-        self.avisos_de_programator = Some(avisos);
-        self
-    }
-
-    /// Pasa a la aplicación la última versión de Programator, si ha llegado. Solo llega una.
-    fn recoger_version_de_programator(&mut self) {
-        let Some(avisos) = &self.avisos_de_programator else {
-            return;
-        };
-        match avisos.try_recv() {
-            Ok(publicacion) => {
-                self.aplicacion.fijar_programator_publicado(publicacion);
-                self.avisos_de_programator = None;
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.avisos_de_programator = None,
-        }
-    }
-
-    /// Pasa a la cola de diálogos el aviso de versión nueva, si ha llegado. Solo llega uno: al
-    /// recibirlo, o si la consulta terminó sin nada, se deja de mirar.
-    fn recoger_aviso_de_version(&mut self) {
-        let Some(avisos) = &self.avisos_de_version else {
-            return;
-        };
-        match avisos.try_recv() {
-            Ok(publicacion) => {
-                self.aplicacion.informar(
-                    textos::TITULO_ACTUALIZACION,
-                    textos::actualizacion_disponible(
-                        &publicacion.version.to_string(),
-                        VERSION_INSTALADA,
-                        &publicacion.enlace,
-                    ),
-                );
-                self.avisos_de_version = None;
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.avisos_de_version = None,
-        }
     }
 
     fn aplicar(&mut self, orden: Orden) {
@@ -143,7 +91,7 @@ impl Ventana {
                 self.aplicacion.pedir_borrado();
                 None
             }
-            Orden::CerrarDialogo(aceptado) => self.aplicacion.cerrar_dialogo(aceptado),
+            Orden::CerrarDialogo(respuesta) => self.aplicacion.cerrar_dialogo(respuesta),
             Orden::EditarRuta(indice, ruta) => {
                 self.aplicacion.editar_ruta(indice, ruta);
                 None
@@ -187,7 +135,7 @@ impl Ventana {
                 );
             });
         });
-        ui.add_space(8.0);
+        ui.add_space(tema::ESPACIO);
         ui.horizontal(|ui| {
             for (pestana, texto) in [
                 (Pestana::Proyectos, textos::PESTANA_PROYECTOS),
@@ -209,86 +157,91 @@ impl Ventana {
                 }
             }
         });
-        ui.add_space(8.0);
+        ui.add_space(tema::ESPACIO);
     }
 
     fn proyectos(&self, ui: &mut egui::Ui, ordenes: &mut Vec<Orden>) {
+        egui::Panel::bottom("acciones").show(ui, |ui| self.panel_de_acciones(ui, ordenes));
+        egui::CentralPanel::default().show(ui, |ui| self.panel_de_la_tabla(ui, ordenes));
+    }
+
+    /// Panel de abajo: el equipo, el papel, los botones de cada agente, agregar y eliminar.
+    fn panel_de_acciones(&self, ui: &mut egui::Ui, ordenes: &mut Vec<Orden>) {
         let edicion = self.aplicacion.edicion_activa();
         let acciones = self.aplicacion.acciones_activas();
-
-        egui::Panel::bottom("acciones").show(ui, |ui| {
-            ui.add_space(12.0);
-            if let Some(equipo) = self.aplicacion.equipo() {
-                ui.label(
-                    RichText::new(equipo)
-                        .size(tema::TAMANO_PEQUENO)
-                        .color(tema::TEXTO_SECUNDARIO),
-                );
-                ui.add_space(8.0);
+        ui.add_space(tema::ESPACIO_GRANDE);
+        if let Some(equipo) = self.aplicacion.equipo() {
+            ui.label(
+                RichText::new(equipo)
+                    .size(tema::TAMANO_PEQUENO)
+                    .color(tema::TEXTO_SECUNDARIO),
+            );
+            ui.add_space(tema::ESPACIO);
+        }
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(textos::ETIQUETA_PAPEL)
+                    .size(tema::TAMANO_PEQUENO)
+                    .color(tema::TEXTO_SECUNDARIO),
+            );
+            let actual = self.aplicacion.papel();
+            for (papel, texto) in [
+                (None, textos::PAPEL_SIN_ELEGIR),
+                (Some(Papel::Jefe), textos::PAPEL_JEFE),
+                (Some(Papel::Ayudante), textos::PAPEL_AYUDANTE),
+            ] {
+                if ui
+                    .add_enabled(acciones, egui::RadioButton::new(actual == papel, texto))
+                    .clicked()
+                {
+                    ordenes.push(Orden::ElegirPapel(papel));
+                }
             }
-            ui.horizontal(|ui| {
+        });
+        ui.add_space(tema::ESPACIO);
+        ui.horizontal_wrapped(|ui| {
+            if boton(ui, textos::BOTON_AGREGAR, tema::MORADO, edicion) {
+                ordenes.push(Orden::Agregar);
+            }
+            let visibles = self.aplicacion.perfiles_visibles();
+            for &indice in &visibles {
+                let Some(perfil) = self.aplicacion.perfiles().get(indice) else {
+                    continue;
+                };
+                let etiqueta = crate::perfiles::etiqueta(perfil);
+                if boton(ui, &etiqueta, tema::color_de_perfil(indice), acciones) {
+                    ordenes.push(Orden::AbrirCon(indice));
+                }
+            }
+            if visibles.is_empty() {
+                let aviso = if self.aplicacion.deteccion_terminada() {
+                    textos::NINGUN_AGENTE
+                } else {
+                    textos::BUSCANDO_AGENTES
+                };
                 ui.label(
-                    RichText::new(textos::ETIQUETA_PAPEL)
+                    RichText::new(aviso)
                         .size(tema::TAMANO_PEQUENO)
                         .color(tema::TEXTO_SECUNDARIO),
                 );
-                let actual = self.aplicacion.papel();
-                for (papel, texto) in [
-                    (None, textos::PAPEL_SIN_ELEGIR),
-                    (Some(Papel::Jefe), textos::PAPEL_JEFE),
-                    (Some(Papel::Ayudante), textos::PAPEL_AYUDANTE),
-                ] {
-                    if ui
-                        .add_enabled(acciones, egui::RadioButton::new(actual == papel, texto))
-                        .clicked()
-                    {
-                        ordenes.push(Orden::ElegirPapel(papel));
-                    }
-                }
-            });
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                if boton(ui, textos::BOTON_AGREGAR, tema::MORADO, edicion) {
-                    ordenes.push(Orden::Agregar);
-                }
-                let visibles = self.aplicacion.perfiles_visibles();
-                for &indice in &visibles {
-                    let Some(perfil) = self.aplicacion.perfiles().get(indice) else {
-                        continue;
-                    };
-                    let etiqueta = crate::perfiles::etiqueta(perfil);
-                    if boton(ui, &etiqueta, tema::color_de_perfil(indice), acciones) {
-                        ordenes.push(Orden::AbrirCon(indice));
-                    }
-                }
-                if visibles.is_empty() {
-                    let aviso = if self.aplicacion.deteccion_terminada() {
-                        textos::NINGUN_AGENTE
-                    } else {
-                        textos::BUSCANDO_AGENTES
-                    };
-                    ui.label(
-                        RichText::new(aviso)
-                            .size(tema::TAMANO_PEQUENO)
-                            .color(tema::TEXTO_SECUNDARIO),
-                    );
-                }
-                if boton(ui, textos::BOTON_ELIMINAR, tema::ROJO, acciones) {
-                    ordenes.push(Orden::Borrar);
-                }
-            });
+            }
+            if boton(ui, textos::BOTON_ELIMINAR, tema::ROJO, acciones) {
+                ordenes.push(Orden::Borrar);
+            }
         });
+    }
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            egui::Frame::new().fill(tema::SUPERFICIE).show(ui, |ui| {
-                ui.set_min_size(ui.available_size());
-                egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                    egui::Grid::new("proyectos")
-                        .num_columns(textos::COLUMNAS.len() + 1)
-                        .striped(true)
-                        .spacing([16.0, 6.0])
-                        .show(ui, |ui| self.tabla(ui, edicion, ordenes));
-                });
+    /// Panel central: la tabla de proyectos.
+    fn panel_de_la_tabla(&self, ui: &mut egui::Ui, ordenes: &mut Vec<Orden>) {
+        let edicion = self.aplicacion.edicion_activa();
+        egui::Frame::new().fill(tema::SUPERFICIE).show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
+            egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+                egui::Grid::new("proyectos")
+                    .num_columns(textos::COLUMNAS.len() + tema::COLUMNAS_DE_ACCION_DE_PROYECTOS)
+                    .striped(true)
+                    .spacing(tema::ESPACIADO_DE_TABLA)
+                    .show(ui, |ui| self.tabla(ui, edicion, ordenes));
             });
         });
     }
@@ -335,7 +288,7 @@ impl Ventana {
                 .size(tema::TAMANO_PEQUENO)
                 .color(tema::TEXTO_SECUNDARIO),
         );
-        ui.add_space(8.0);
+        ui.add_space(tema::ESPACIO);
         ui.horizontal(|ui| {
             let guardar = edicion && self.aplicacion.rutas_cambiadas();
             if boton(ui, textos::BOTON_GUARDAR_RUTAS, tema::MORADO, guardar) {
@@ -359,7 +312,7 @@ impl Ventana {
                 );
             }
         });
-        ui.add_space(8.0);
+        ui.add_space(tema::ESPACIO);
         egui::Frame::new()
             .fill(tema::SUPERFICIE)
             .inner_margin(tema::MARGEN_INTERIOR)
@@ -367,9 +320,11 @@ impl Ventana {
                 ui.set_min_size(ui.available_size());
                 egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
                     egui::Grid::new("agentes")
-                        .num_columns(textos::COLUMNAS_AGENTES.len() + 2)
+                        .num_columns(
+                            textos::COLUMNAS_AGENTES.len() + tema::COLUMNAS_DE_ACCION_DE_AGENTES,
+                        )
                         .striped(true)
-                        .spacing([16.0, 6.0])
+                        .spacing(tema::ESPACIADO_DE_TABLA)
                         .show(ui, |ui| self.tabla_de_agentes(ui, edicion, ordenes));
                 });
             });
@@ -437,7 +392,7 @@ impl Ventana {
                 .size(tema::TAMANO_PEQUENO)
                 .color(tema::TEXTO_SECUNDARIO),
         );
-        ui.add_space(6.0);
+        ui.add_space(tema::ESPACIO_PEQUENO);
         egui::Frame::new()
             .fill(tema::SUPERFICIE)
             .inner_margin(tema::MARGEN_INTERIOR)
@@ -468,32 +423,36 @@ impl Ventana {
             ui.label(
                 RichText::new(dialogo.titulo())
                     .strong()
-                    .size(tema::TAMANO_TEXTO + 2.0),
+                    .size(tema::TAMANO_TEXTO + tema::AUMENTO_DEL_TITULO),
             );
-            ui.add_space(12.0);
+            ui.add_space(tema::ESPACIO_GRANDE);
             egui::ScrollArea::vertical()
                 .max_height(tema::ALTO_MAXIMO_DIALOGO)
                 .show(ui, |ui| {
                     ui.add(egui::Label::new(dialogo.texto()).selectable(true).wrap());
                 });
-            ui.add_space(16.0);
+            ui.add_space(tema::ESPACIO_MUY_GRANDE);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if dialogo.pide_confirmacion() {
                     if ui.button(textos::BOTON_NO).clicked() {
-                        ordenes.push(Orden::CerrarDialogo(false));
+                        ordenes.push(Orden::CerrarDialogo(RespuestaDeDialogo::Cancelar));
                     }
                     if ui.button(textos::BOTON_SI).clicked() {
-                        ordenes.push(Orden::CerrarDialogo(true));
+                        ordenes.push(Orden::CerrarDialogo(RespuestaDeDialogo::Aceptar));
                     }
                 } else if ui.button(textos::BOTON_ACEPTAR).clicked() {
-                    ordenes.push(Orden::CerrarDialogo(true));
+                    ordenes.push(Orden::CerrarDialogo(RespuestaDeDialogo::Aceptar));
                 }
             });
         });
         // Escape o un clic fuera cierran el diálogo como «No» o «Aceptar»: nunca confirman un
         // borrado.
         if respuesta.should_close() && ordenes.is_empty() {
-            ordenes.push(Orden::CerrarDialogo(!dialogo.pide_confirmacion()));
+            ordenes.push(Orden::CerrarDialogo(if dialogo.pide_confirmacion() {
+                RespuestaDeDialogo::Cancelar
+            } else {
+                RespuestaDeDialogo::Aceptar
+            }));
         }
     }
 }
@@ -510,14 +469,15 @@ fn boton(ui: &mut egui::Ui, texto: &str, color: Color32, activo: bool) -> bool {
         .size(tema::TAMANO_TEXTO)
         .strong()
         .color(letra);
-    let boton = egui::Button::new(rotulo).fill(fondo).corner_radius(6);
+    let boton = egui::Button::new(rotulo)
+        .fill(fondo)
+        .corner_radius(tema::RADIO_DE_BOTON);
     ui.add_enabled(activo, boton).clicked()
 }
 
 impl eframe::App for Ventana {
     fn logic(&mut self, _contexto: &egui::Context, _marco: &mut eframe::Frame) {
-        self.recoger_aviso_de_version();
-        self.recoger_version_de_programator();
+        self.avisos.entregar(&mut self.aplicacion);
         loop {
             match self.trabajador.recoger() {
                 Ok(Some(resultado)) => self.aplicacion.terminar(resultado),
@@ -543,7 +503,7 @@ impl eframe::App for Ventana {
             .show(ui, |ui| {
                 egui::Panel::top("encabezado").show(ui, |ui| self.encabezado(ui));
                 egui::Panel::bottom("estado").show(ui, |ui| {
-                    ui.add_space(10.0);
+                    ui.add_space(tema::ESPACIO_ENTRE_BOTONES);
                     ui.label(
                         RichText::new(self.aplicacion.texto_de_estado())
                             .size(tema::TAMANO_PEQUENO)

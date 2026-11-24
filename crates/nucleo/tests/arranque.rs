@@ -56,7 +56,7 @@ fn el_mensaje_inicial_remite_al_arranque_de_agents_md() {
 
 #[test]
 fn el_arranque_permite_las_herramientas_compartidas_de_fuera_del_proyecto() {
-    // F13: «Nunca leas ni escribas fuera» impedía usar las máquinas virtuales de pruebas.
+    // «Nunca leas ni escribas fuera» impedía usar las máquinas virtuales de pruebas.
     let cabecera = plantillas::cabecera();
     assert!(cabecera.contains("Nunca escribas fuera de `GESTOR_PROYECTO` ni leas otros proyectos."));
     assert!(cabecera.contains("Las máquinas virtuales de pruebas sí se usan."));

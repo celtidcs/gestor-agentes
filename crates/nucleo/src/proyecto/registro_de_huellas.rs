@@ -56,7 +56,7 @@ impl RegistroDeHuellas {
             Err(error) => return Self::vacio_con_aviso(informe, &error.to_string()),
         };
         match serde_json::from_str::<Option<RegistroDeHuellas>>(
-            texto.trim_start_matches('\u{FEFF}'),
+            crate::instrucciones::formato::quitar_bom(&texto),
         ) {
             Ok(registro) => registro.unwrap_or_default(),
             Err(error) => Self::vacio_con_aviso(informe, &error.to_string()),

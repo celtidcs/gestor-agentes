@@ -3,6 +3,62 @@ Historial de cambios
 Este historial recoge lo que cambia en cada versión, contado para quien usa la aplicación. Las versiones siguen la numeración de Semantic Versioning: mayor, menor y corrección.
 
 
+3.9.1, del 24 de noviembre de 2026. Código publicado más limpio
+
+No cambia nada de lo que hace la aplicación. Los comentarios del código y de las pruebas ya no llevan las claves con que se organizaba el trabajo interno, como los códigos de cada tarea o las referencias a sus revisiones, y explican solo lo que hace el código o lo que comprueba cada prueba.
+
+3.9.0, del 24 de noviembre de 2026. Las cuentas, con la biblioteca común
+
+Las cuentas las encuentra la biblioteca común. La búsqueda de las cuentas de Claude Code, Codex y agy la hace ahora la biblioteca compartida deteccion-agentes, en su versión 0.2.0, incluida en la carpeta bibliotecas. Es la misma que usan otros programas, así que todos ven las mismas cuentas de la misma forma.
+
+Más carpetas son cuentas. Una carpeta de tu carpeta de usuario que se llame .claude o .codex seguido de cualquier cosa es una cuenta si tiene alguno de los archivos que la herramienta crea al usarla, no solo el de la sesión: en Claude Code, .claude.json, .credentials.json o settings.json, y en Codex, config.toml o auth.json. Antes solo contaban las carpetas con número, como .claude2, y solo con el archivo de la sesión. Ahora .claude-trabajo también es una cuenta, que toma el número siguiente al mayor que ya tengan tus agentes de Claude. La primera cuenta tiene botón si existe su carpeta, aunque esté vacía. Si guardabas una copia de una cuenta con un nombre como .claude-old para que la aplicación no la usara, cámbiale el nombre por otro que no empiece por .claude. La carpeta que señale CLAUDE_CONFIG_DIR o CODEX_HOME en el entorno desde el que abres la aplicación también cuenta, si existe.
+
+Cada cuenta conserva su número. Una cuenta que ya tiene agente lo conserva aunque aparezcan otras carpetas, y un agente se reconoce por su carpeta, aunque esté escrita con otras mayúsculas o con otra barra en Windows. Si un agente ya usa la primera cuenta con otro número, no se añade un Claude 1 aparte.
+
+Claude 1 y Codex 1 se abren como su cuenta por defecto. La primera cuenta de cada herramienta se abre ahora quitando CLAUDE_CONFIG_DIR o CODEX_HOME, de modo que la herramienta use su cuenta por defecto aunque abras la aplicación desde una terminal que tenga puesta la variable de otra cuenta. Claude 1 ya no fija la carpeta ~/.claude en tu lista de agentes, y si la fijaba, se le quita al buscar los agentes.
+
+El estado de Claude 1 se conserva. Claude Code guarda el estado de su cuenta por defecto, con tus proyectos y ajustes, en el archivo .claude.json de tu carpeta de usuario, y no en el de .claude, que es donde lo guardaba mientras la aplicación lo abría con la variable puesta. La primera vez que abras Claude 1 con esta versión, la aplicación copia el de .claude sobre el de tu carpeta de usuario, guarda antes el anterior en la carpeta datos, cambia el nombre del de .claude para que no se vuelva a copiar y te lo cuenta en la ventana de preparación del proyecto. Si no existe el de .claude, no toca nada, y si algo falla lo vuelve a intentar la próxima vez sin sobrescribir la copia guardada.
+
+Si tienes copias de cuentas, cámbiales el nombre. El manual de uso explica, en el apartado Si guardas copias de cuentas, por qué una copia con un nombre como .claude-old aparece ahora como un agente nuevo, qué pasa si no haces nada y cómo evitarlo o quitar ese agente de la lista.
+
+Una lista de agentes dañada ya no se pierde. Si perfiles-agentes.json no se puede leer al arrancar, por ejemplo porque se ha editado a mano y ha quedado mal escrito, la aplicación ya no lo sobrescribe con las cuentas que encuentra al buscar los agentes, que borraba todo lo que tenías en él. Ahora no guarda nada en ese archivo durante esa sesión y te lo dice en la barra de estado.
+
+El alta a mano, con las mismas reglas. Añadir cuenta valida la carpeta con la biblioteca, contra los agentes que ya tienes y contra las cuentas encontradas en el equipo, y te dice qué agente usa ya esa carpeta. Una carpeta de tu carpeta de usuario se guarda igual que la de una cuenta encontrada, y .claude5, por ejemplo, da Claude 5 si ese número está libre. Si la aplicación no sabe cuál es tu carpeta de usuario, no da de alta la cuenta y te dice por qué.
+
+
+3.8.2, del 23 de noviembre de 2026. La biblioteca, lista para publicarse
+
+La biblioteca aviso-version-github pasa a su versión 0.2.3, que no cambia su código: su documentación y sus archivos ya no citan rutas del equipo en que se escribe, ni nombres de personas, programas o máquinas, para que pueda publicarse con Gestor Agentes. El comportamiento de la aplicación no cambia. Se corrige además una prueba del vigilante que en Windows podía leer el registro de avisos en el instante en que estaba creado pero aún vacío.
+
+
+3.8.1, del 23 de noviembre de 2026. El aviso de versión, mejor vigilado
+
+Registro de fallos más claro. Cuando la comprobación de versión nueva falla, la línea que queda en la salida de errores lleva ahora la fecha y la hora y dice si fallaba la de Gestor Agentes o la de Programator, con su repositorio. Antes las dos escribían lo mismo y no se podían distinguir.
+
+El aviso dice siempre la versión con que se comparó. La versión instalada que aparece en el aviso de Actualización disponible es ahora, por construcción, la misma con que se comparó la publicada.
+
+Más pruebas. Hay pruebas nuevas de que el tiempo máximo de espera de ajustes.json llega de verdad a la consulta, de que el aviso y la versión de Programator llegan a la aplicación y de que un fallo al identificar a Gestor Agentes ante GitHub queda registrado. El ejemplo de consulta real dice, junto a su resultado, si la comprobación falló.
+
+Documentación más precisa. Las guías dicen en qué orden se miran las variables del proxy y que hay una comprobación para cada programa.
+
+
+3.8.0, del 23 de noviembre de 2026. Un aviso de versión compartido
+
+Aviso de versión con la biblioteca común. La comprobación de si hay una versión nueva de Gestor Agentes, y la de la última versión de Programator, la hace ahora la biblioteca compartida aviso-version-github, incluida en la carpeta bibliotecas. Por fuera todo sigue igual y tu ajustes.json no cambia. Por dentro gana tres cosas: la dirección de descarga del aviso se compone siempre con el repositorio configurado y nunca con la que venga en la respuesta, la petición respeta el proxy del sistema, también el de las opciones de internet de Windows, y la respuesta se lee con un tamaño máximo.
+
+La biblioteca, en su versión 0.2.0. Gestor Agentes usa la versión 0.2.0 de esa biblioteca. Con ella, Gestor Agentes se presenta con su nombre y su versión en la petición a GitHub, y si la comprobación falla, porque no hay red o la respuesta no sirve, el motivo queda escrito en la salida de errores en vez de perderse, que en Windows solo se ve si abres la aplicación desde una terminal. Sigue sin salir ningún aviso en ese caso, y en ajustes.json no cambia nada.
+
+Mensaje de error más claro. Si RepositorioDeProgramator está mal escrito en ajustes.json, el aviso lo dice con ese nombre y con su propio mensaje; antes culpaba a RepositorioDeActualizaciones.
+
+Vigilante de Codex más fiable. El vigilante que avisa a Codex ya no puede quedarse esperando cuando la orden codex queue escribe mucho por su salida, y su registro de avisos dice el tiempo de espera real cuando Codex no contesta. Cuando junta en una sola entrega un encargo y una mutación viva, el registro conserva las dos etiquetas, y no solo una.
+
+El Jefe que eliges se ve en el panel. Si eliges Jefe de proyecto en la ventana al abrir un agente, la línea del equipo lo muestra ya como Jefe; antes solo reconocía el Jefe anotado con la forma de la plantilla.
+
+Un mensaje más limpio. El aviso de que la ruta de Programator apunta a una versión antigua ya no lleva espacios de más en medio de la frase.
+
+Orden por dentro y documentación al día. El código se ha reorganizado por dentro, en piezas más pequeñas y mejor separadas, sin cambiar lo que hace la aplicación. Y la documentación se ha puesto al día con el comportamiento real de Codex, de agy y del aviso de versión.
+
+
 3.7.0, del 22 de noviembre de 2026. Nada pendiente: cuentas propias, avisos más finos y Programator al día
 
 Verificaciones con más constancia. La guía de verificación que la aplicación deja en cada proyecto pide ahora, por cada orden, la orden literal, sus horas, su código de salida y sus líneas de resumen tal cual; que se ejecuten todos los criterios publicados y no solo las cuatro puertas; que ningún valor esperado se copie de otro agente; que en los proyectos con varios manifiestos las puertas se pasen en cada uno; y que las pruebas de Windows y Linux se hagan en las máquinas virtuales y no en el equipo del usuario. También enumera las señales que deben hacer desconfiar a quien acepta un resultado.

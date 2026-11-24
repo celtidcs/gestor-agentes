@@ -9,11 +9,13 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
 use chrono::NaiveDateTime;
-use nucleo::actualizaciones::{Publicacion, Version};
+use nucleo::actualizaciones::Version;
 use nucleo::configuracion::{
     ErrorDeConfiguracion, HerramientaDelPerfil, PerfilDeAgente, ProyectoRegistrado,
 };
+use nucleo::cuentas::Incorporacion;
 use nucleo::proyecto::estado::EstadoDelProyecto;
+use nucleo::proyecto::informe::InformeDeInicializacion;
 use nucleo::proyecto::papeles::Papel;
 use nucleo::proyecto::revision_del_canal::ResumenDelEquipo;
 use nucleo::version_de_programa;
@@ -22,9 +24,19 @@ use crate::orden::{self, ClaveDeOrden};
 use crate::perfiles::{self, CarpetaDelAgente, Disponibilidad, EstadoDelAgente};
 use crate::textos;
 use crate::trabajos::{Lanzamiento, ResultadoDeTrabajo, Trabajo};
+pub use nucleo::orden::nombre_de_carpeta;
 
-/// Lo que la aplicación necesita del sistema.
-pub trait Servicios {
+/// Respuesta del usuario a un diálogo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RespuestaDeDialogo {
+    /// «Sí» o «Aceptar».
+    Aceptar,
+    /// «No», «Cancelar» o cerrar la ventana del diálogo.
+    Cancelar,
+}
+
+/// Guardado de la lista de proyectos y de los perfiles.
+pub trait AlmacenDeConfiguracion {
     /// Guarda la lista de proyectos.
     ///
     /// # Errors
@@ -34,31 +46,56 @@ pub trait Servicios {
         &self,
         proyectos: &[ProyectoRegistrado],
     ) -> Result<(), ErrorDeConfiguracion>;
-    /// Estado de las instrucciones de un proyecto.
-    fn estado_del_proyecto(&self, carpeta: &Path) -> EstadoDelProyecto;
-    /// Indica si existe la carpeta.
-    fn existe_carpeta(&self, carpeta: &Path) -> bool;
-    /// Momento actual en ISO 8601 con desfase, para la última apertura.
-    fn ahora(&self) -> String;
-    /// Texto visible de una última apertura guardada.
-    fn mostrar_fecha(&self, iso: &str) -> String;
-    /// Archivo donde se editan los perfiles, para los mensajes.
-    fn ruta_perfiles(&self) -> PathBuf;
     /// Guarda los perfiles.
     ///
     /// # Errors
     ///
     /// El de la configuración si un perfil no es válido o no se puede escribir.
     fn guardar_perfiles(&self, perfiles: &[PerfilDeAgente]) -> Result<(), ErrorDeConfiguracion>;
+    /// Archivo donde se editan los perfiles, para los mensajes.
+    fn ruta_perfiles(&self) -> PathBuf;
+}
+
+/// Hora actual y su forma de mostrarla.
+pub trait RelojDeInterfaz {
+    /// Momento actual en ISO 8601 con desfase, para la última apertura.
+    fn ahora(&self) -> String;
+    /// Texto visible de una última apertura guardada.
+    fn mostrar_fecha(&self, iso: &str) -> String;
+}
+
+/// Comprobaciones de disco y carpeta personal.
+pub trait DiscoDeInterfaz {
+    /// Indica si existe la carpeta.
+    fn existe_carpeta(&self, carpeta: &Path) -> bool;
     /// Indica si existe el archivo.
     fn existe_archivo(&self, ruta: &Path) -> bool;
     /// Carpeta personal del usuario, para sustituir «~» en las rutas.
     fn carpeta_personal(&self) -> Option<PathBuf>;
+}
+
+/// Lo que se lee de un proyecto: su estado y su equipo.
+pub trait InspectorDeProyecto {
+    /// Estado de las instrucciones de un proyecto.
+    fn estado_del_proyecto(&self, carpeta: &Path) -> EstadoDelProyecto;
     /// Cómo está el equipo del proyecto, leído de su .gestor/canal/, y la hora local con la que
     /// se calcula la antigüedad de los latidos. Nada si el proyecto no tiene estado del canal.
     fn equipo_del_proyecto(&self, _carpeta: &Path) -> Option<(ResumenDelEquipo, NaiveDateTime)> {
         None
     }
+}
+
+/// Lo que la aplicación necesita del sistema.
+///
+/// Junta los rasgos pequeños de cada responsabilidad.
+pub trait Servicios:
+    AlmacenDeConfiguracion + RelojDeInterfaz + DiscoDeInterfaz + InspectorDeProyecto
+{
+}
+
+impl<T: AlmacenDeConfiguracion + RelojDeInterfaz + DiscoDeInterfaz + InspectorDeProyecto> Servicios
+    for T
+{
 }
 
 /// Fila de la tabla de proyectos, con lo que se muestra ya calculado para no leer el disco en
@@ -130,8 +167,8 @@ pub struct Aplicacion {
     /// Indica si está en curso una búsqueda de agentes (al arrancar, Buscar de nuevo o al guardar
     /// las rutas). Solo la marca [`Self::detectar`] y la borra el final del trabajo.
     buscando: bool,
-    /// Última versión publicada de Programator, si ha llegado la consulta (F7).
-    programator_publicado: Option<Publicacion>,
+    /// Última versión publicada de Programator, si ha llegado la consulta.
+    programator_publicado: Option<Version>,
     /// Ruta del ejecutable de cada perfil tal como se está editando en la pestaña de agentes.
     rutas: Vec<String>,
     seleccion: Option<String>,
@@ -142,6 +179,10 @@ pub struct Aplicacion {
     equipo: Option<String>,
     /// Papel elegido para el próximo agente que se abra. Vale para una sola apertura.
     papel: Option<Papel>,
+    /// Si perfiles-agentes.json no se pudo leer al arrancar. Entonces la lista de esta sesión no
+    /// es la del usuario, y guardarla sobrescribiría su archivo: no se guarda nada hasta que lo
+    /// corrija y vuelva a abrir la aplicación.
+    perfiles_ilegibles: bool,
 }
 
 impl Aplicacion {
@@ -169,6 +210,7 @@ impl Aplicacion {
             ocupada: false,
             equipo: None,
             papel: None,
+            perfiles_ilegibles: false,
         };
         match proyectos {
             Ok(proyectos) => {
@@ -179,7 +221,10 @@ impl Aplicacion {
         }
         match perfiles {
             Ok(perfiles) => aplicacion.poner_perfiles(perfiles),
-            Err(error) => aplicacion.estado = textos::error_de_configuracion(&error),
+            Err(error) => {
+                aplicacion.estado = textos::error_de_configuracion(&error);
+                aplicacion.perfiles_ilegibles = true;
+            }
         }
         aplicacion
     }
@@ -228,15 +273,21 @@ impl Aplicacion {
     }
 
     /// Anota la última versión publicada de Programator.
-    pub fn fijar_programator_publicado(&mut self, publicacion: Publicacion) {
-        self.programator_publicado = Some(publicacion);
+    pub fn fijar_programator_publicado(&mut self, version: Version) {
+        self.programator_publicado = Some(version);
+    }
+
+    /// Última versión publicada de Programator, si ya ha llegado.
+    #[must_use]
+    pub const fn programator_publicado(&self) -> Option<Version> {
+        self.programator_publicado
     }
 
     /// Versión publicada de Programator más nueva que la del programa del perfil, si la hay.
     #[must_use]
     pub fn version_mas_nueva(&self, indice: usize) -> Option<Version> {
         let instalada = self.carpeta_del_agente(indice)?.version();
-        version_de_programa::mas_nueva(instalada, self.programator_publicado.as_ref())
+        version_de_programa::mas_nueva(instalada, self.programator_publicado)
     }
 
     /// Indica si hay una búsqueda de agentes en curso. Abrir o borrar no cuentan.
@@ -252,7 +303,12 @@ impl Aplicacion {
         let ruta_cambiada = self.perfiles.get(indice).is_some_and(|perfil| {
             perfil.ejecutable().unwrap_or("") != self.ruta_editada(indice).trim()
         });
-        perfiles::estado_del_agente(self.disponibilidad(indice), ruta_cambiada, self.buscando)
+        let comprobacion = if ruta_cambiada || self.buscando {
+            perfiles::Comprobacion::Pendiente
+        } else {
+            perfiles::Comprobacion::Vigente
+        };
+        perfiles::estado_del_agente(self.disponibilidad(indice), comprobacion)
     }
 
     /// Ruta del ejecutable del perfil tal como se está editando.
@@ -348,8 +404,8 @@ impl Aplicacion {
             );
             return None;
         }
-        if let Err(error) = self.servicios.guardar_perfiles(&nuevos) {
-            self.informar(textos::TITULO_ERROR, textos::perfiles_no_guardados(&error));
+        if let Err(motivo) = self.guardar_perfiles(&nuevos) {
+            self.informar(textos::TITULO_ERROR, motivo);
             return None;
         }
         self.poner_perfiles(nuevos);
@@ -512,12 +568,14 @@ impl Aplicacion {
         self.guardar();
     }
 
-    /// Cierra el diálogo actual con la respuesta del usuario («Sí» o «Aceptar» es `true`).
-    /// Confirmar un borrado devuelve el trabajo que lo hace.
+    /// Cierra el diálogo actual con la respuesta del usuario. Confirmar un borrado devuelve el
+    /// trabajo que lo hace.
     #[must_use]
-    pub fn cerrar_dialogo(&mut self, aceptado: bool) -> Option<Trabajo> {
+    pub fn cerrar_dialogo(&mut self, respuesta: RespuestaDeDialogo) -> Option<Trabajo> {
         match self.dialogos.pop_front()? {
-            Dialogo::ConfirmarBorrado { nombre, ruta } if aceptado => {
+            Dialogo::ConfirmarBorrado { nombre, ruta }
+                if respuesta == RespuestaDeDialogo::Aceptar =>
+            {
                 self.empezar_trabajo(Trabajo::Borrar { nombre, ruta })
             }
             _ => None,
@@ -538,47 +596,14 @@ impl Aplicacion {
                 informe,
                 tamano_instrucciones,
                 lanzamiento,
-            } => {
-                self.marcar_apertura(&ruta);
-                let identidad = perfil.nombre();
-                let estado = match lanzamiento {
-                    Lanzamiento::Abierto => {
-                        textos::abierto(&identidad, &nombre, informe.cambios().len())
-                    }
-                    Lanzamiento::Fallido(_) => textos::preparado_sin_abrir(&nombre, &identidad),
-                };
-                let estado = match perfiles::aviso_de_tamano(&perfil, tamano_instrucciones) {
-                    Some(aviso) => textos::con_aviso(&estado, &aviso),
-                    None => estado,
-                };
-                let estado = match self.version_mas_nueva_de(&perfil) {
-                    Some(nueva) => {
-                        textos::con_aviso(&estado, &textos::programator_anticuado(nueva))
-                    }
-                    None => estado,
-                };
-                self.estado = match informe.avisos().len() {
-                    0 => estado,
-                    avisos => textos::con_aviso(&estado, &textos::avisos_para_los_agentes(avisos)),
-                };
-                if informe.requiere_ventana() {
-                    self.informar(
-                        &textos::titulo_preparacion(&nombre),
-                        informe.componer_texto(),
-                    );
-                }
-                match lanzamiento {
-                    Lanzamiento::Abierto => {}
-                    Lanzamiento::Fallido(error) => {
-                        let (titulo, texto) = textos::fallo_de_lanzamiento(
-                            &error,
-                            &nombre,
-                            &self.servicios.ruta_perfiles(),
-                        );
-                        self.informar(&titulo, texto);
-                    }
-                }
-            }
+            } => self.recibir_apertura(
+                &nombre,
+                &ruta,
+                &perfil,
+                &informe,
+                tamano_instrucciones,
+                lanzamiento,
+            ),
             ResultadoDeTrabajo::Borrado {
                 nombre,
                 ruta,
@@ -599,7 +624,16 @@ impl Aplicacion {
                 disponibilidad,
                 carpetas,
                 anadidos,
-            } => self.recibir_deteccion(perfiles, disponibilidad, carpetas, anadidos),
+                normalizados,
+            } => self.recibir_deteccion(
+                perfiles,
+                disponibilidad,
+                carpetas,
+                Incorporacion {
+                    normalizados,
+                    anadidos,
+                },
+            ),
             ResultadoDeTrabajo::EjecutableElegido {
                 indice,
                 ruta: Some(ruta),
@@ -617,24 +651,93 @@ impl Aplicacion {
         self.leer_equipo();
     }
 
-    /// Pone los perfiles detectados y su disponibilidad; si hay cuentas nuevas, los guarda. Si no
-    /// se pueden guardar, se usan igualmente en esta sesión y se avisa en la barra de estado.
+    /// Recoge la preparación y el lanzamiento de un agente: la barra de estado con sus avisos, el
+    /// informe si pide ventana y el fallo del lanzamiento, si lo hubo.
+    fn recibir_apertura(
+        &mut self,
+        nombre: &str,
+        ruta: &str,
+        perfil: &PerfilDeAgente,
+        informe: &InformeDeInicializacion,
+        tamano_instrucciones: Option<u64>,
+        lanzamiento: Lanzamiento,
+    ) {
+        self.marcar_apertura(ruta);
+        self.estado =
+            self.estado_tras_abrir(nombre, perfil, informe, tamano_instrucciones, &lanzamiento);
+        if informe.requiere_ventana() {
+            self.informar(
+                &textos::titulo_preparacion(nombre),
+                informe.componer_texto(),
+            );
+        }
+        if let Lanzamiento::Fallido(error) = lanzamiento {
+            let (titulo, texto) =
+                textos::fallo_de_lanzamiento(&error, nombre, &self.servicios.ruta_perfiles());
+            self.informar(&titulo, texto);
+        }
+    }
+
+    /// Texto de la barra de estado tras abrir un agente, con cada aviso que toque.
+    fn estado_tras_abrir(
+        &self,
+        nombre: &str,
+        perfil: &PerfilDeAgente,
+        informe: &InformeDeInicializacion,
+        tamano_instrucciones: Option<u64>,
+        lanzamiento: &Lanzamiento,
+    ) -> String {
+        let identidad = perfil.nombre();
+        let mut estado = match lanzamiento {
+            Lanzamiento::Abierto => textos::abierto(&identidad, nombre, informe.cambios().len()),
+            Lanzamiento::Fallido(_) => textos::preparado_sin_abrir(nombre, &identidad),
+        };
+        if let Some(aviso) = perfiles::aviso_de_tamano(perfil, tamano_instrucciones) {
+            estado = textos::con_aviso(&estado, &aviso);
+        }
+        if let Some(nueva) = self.version_mas_nueva_de(perfil) {
+            estado = textos::con_aviso(&estado, &textos::programator_anticuado(nueva));
+        }
+        match informe.avisos().len() {
+            0 => estado,
+            avisos => textos::con_aviso(&estado, &textos::avisos_para_los_agentes(avisos)),
+        }
+    }
+
+    /// Pone los perfiles detectados y su disponibilidad; si han cambiado, los guarda. Solo las
+    /// cuentas nuevas se anuncian en la barra de estado: quitar a un perfil la carpeta por defecto
+    /// no cambia nada que el usuario vea. Si no se pueden guardar, se usan igualmente en esta
+    /// sesión y se avisa en la barra de estado.
     fn recibir_deteccion(
         &mut self,
         perfiles: Vec<PerfilDeAgente>,
         disponibilidad: Vec<Disponibilidad>,
         carpetas: Vec<Option<CarpetaDelAgente>>,
-        anadidos: usize,
+        cambios: Incorporacion,
     ) {
-        if anadidos > 0 {
-            self.estado = match self.servicios.guardar_perfiles(&perfiles) {
-                Ok(()) => textos::cuentas_anadidas(anadidos),
-                Err(error) => textos::perfiles_no_guardados(&error),
-            };
+        if cambios.hay_cambios() {
+            match self.guardar_perfiles(&perfiles) {
+                Ok(()) if cambios.anadidos > 0 => {
+                    self.estado = textos::cuentas_anadidas(cambios.anadidos);
+                }
+                Ok(()) => {}
+                Err(motivo) => self.estado = motivo,
+            }
         }
         self.poner_perfiles(perfiles);
         self.disponibilidad = Some(disponibilidad);
         self.carpetas = carpetas;
+    }
+
+    /// Guarda la lista de agentes, salvo que la del usuario no se pudiera leer al arrancar (ver
+    /// el campo perfiles_ilegibles). Devuelve el texto que explica por qué no se ha guardado.
+    fn guardar_perfiles(&self, perfiles: &[PerfilDeAgente]) -> Result<(), String> {
+        if self.perfiles_ilegibles {
+            return Err(textos::PERFILES_ILEGIBLES_SIN_GUARDAR.to_owned());
+        }
+        self.servicios
+            .guardar_perfiles(perfiles)
+            .map_err(|error| textos::perfiles_no_guardados(&error))
     }
 
     /// [`Self::version_mas_nueva`] del perfil `perfil`, buscado por su identidad.
@@ -755,15 +858,4 @@ impl Aplicacion {
             self.estado = textos::guardado_fallido(&error);
         }
     }
-}
-
-/// Nombre de un proyecto nuevo: el último componente de su carpeta, sin separadores finales.
-#[must_use]
-pub fn nombre_de_carpeta(ruta: &str) -> String {
-    let sin_separador = ruta.trim_end_matches(['/', '\\']);
-    sin_separador
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(sin_separador)
-        .to_owned()
 }

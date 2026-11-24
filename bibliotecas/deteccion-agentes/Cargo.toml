@@ -1,0 +1,22 @@
+[package]
+name = "deteccion-agentes"
+version = "0.2.0"
+edition = "2021"
+description = "Busca en el equipo las cuentas de los agentes de programación de consola (Claude Code, Codex CLI y Antigravity CLI) y dice dónde se registra un servidor MCP en cada una y cómo abrir su consola con ella."
+authors = ["celtidcs <261796974+celtidcs@users.noreply.github.com>"]
+readme = "README.md"
+keywords = ["agentes", "mcp", "claude", "codex", "cuentas"]
+categories = ["filesystem"]
+# Misma licencia que el programa del que sale. El texto íntegro está en LICENSE.
+license = "GPL-3.0-or-later"
+# Se usa por ruta desde los programas que la necesitan; no se sube a crates.io.
+publish = false
+
+# Solo usa la biblioteca estándar.
+[dependencies]
+
+# La integración de referencia de documentacion/norma-de-integracion.md. Con test = true,
+# cargo test ejecuta también sus pruebas, así que la plantilla no puede quedarse atrás.
+[[example]]
+name = "integracion_de_referencia"
+test = true

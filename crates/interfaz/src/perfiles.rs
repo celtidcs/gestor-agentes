@@ -14,18 +14,6 @@ use crate::textos;
 /// como «~/.claude» literal y el fallo se ve en lugar de acabar en una carpeta relativa.
 const SIN_CARPETA_PERSONAL: &str = "~";
 
-/// Carpeta de Claude Code dentro de la personal cuando el perfil no fija CLAUDE_CONFIG_DIR:
-/// «~/.claude», la misma que reconoce `nucleo::cuentas` como cuenta por defecto de Claude.
-pub const CARPETA_POR_DEFECTO_CLAUDE: &str = ".claude";
-
-/// Carpeta de Codex dentro de la personal cuando el perfil no fija CODEX_HOME: «~/.codex», la
-/// misma que reconoce `nucleo::cuentas` como cuenta por defecto de Codex.
-pub const CARPETA_POR_DEFECTO_CODEX: &str = ".codex";
-
-/// Carpeta de agy dentro de la personal: «~/.gemini», donde guarda sus proyectos
-/// (`lanzador::agy::CARPETA_DE_PROYECTOS`).
-pub const CARPETA_POR_DEFECTO_AGY: &str = ".gemini";
-
 /// Si un perfil se puede abrir en este equipo, y si no, por qué.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Disponibilidad {
@@ -42,7 +30,7 @@ pub enum Disponibilidad {
 pub struct CarpetaDelAgente {
     ruta: PathBuf,
     existe: bool,
-    /// Versión del programa que se abre, si se conoce (solo Programator en Windows, F7).
+    /// Versión del programa que se abre, si se conoce (solo Programator en Windows).
     version: Option<Version>,
 }
 
@@ -97,15 +85,23 @@ pub enum EstadoDelAgente {
     SinComprobar,
 }
 
-/// Estado de un agente a partir de su disponibilidad (nada si aún no se ha detectado), de si su
-/// ruta editada difiere de la guardada y de si hay una búsqueda de agentes en curso.
+/// Si la disponibilidad detectada vale para lo que se muestra.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Comprobacion {
+    /// Vale: no hay búsqueda en curso y la ruta mostrada es la guardada.
+    Vigente,
+    /// No vale todavía: hay una búsqueda en curso o la ruta editada no se ha guardado.
+    Pendiente,
+}
+
+/// Estado de un agente a partir de su disponibilidad (nada si aún no se ha detectado) y de si esa
+/// disponibilidad vale para lo que se muestra.
 #[must_use]
 pub const fn estado_del_agente(
     disponibilidad: Option<&Disponibilidad>,
-    ruta_cambiada: bool,
-    buscando: bool,
+    comprobacion: Comprobacion,
 ) -> EstadoDelAgente {
-    if ruta_cambiada || buscando {
+    if matches!(comprobacion, Comprobacion::Pendiente) {
         return EstadoDelAgente::SinComprobar;
     }
     match disponibilidad {
@@ -171,7 +167,7 @@ pub fn peticion(
         identidad: perfil.nombre(),
         carpeta_proyecto: carpeta_proyecto.to_path_buf(),
         nombre_proyecto: nombre_proyecto.to_owned(),
-        directorio_configuracion: perfil.directorio_configuracion_expandido(&personal),
+        ajuste_de_entorno: nucleo::cuentas::ajuste_de_lanzamiento(perfil, &personal),
         ejecutable: perfil.ejecutable_expandido(&personal),
         argumentos_extra: perfil.argumentos().to_vec(),
         mensaje_inicial: Some(nucleo::plantillas::mensaje_inicial()),
@@ -187,31 +183,23 @@ pub fn ejecutable_fijado(
     perfil.ejecutable_expandido(&personal_o_tilde(carpeta_personal))
 }
 
-/// Carpeta donde vive el agente del perfil, con «~» sustituida. Claude y Codex: la que fija el
-/// perfil (CLAUDE_CONFIG_DIR o CODEX_HOME) o, si no fija ninguna, la que la herramienta usa por
-/// defecto. agy: ~/.gemini. Programator: la carpeta de su ejecutable fijado; nada sin él.
+/// Carpeta donde vive el agente del perfil, con «~» sustituida. Claude, Codex y agy: la carpeta de
+/// su cuenta ([`nucleo::cuentas::carpeta_de_la_cuenta`]: la que fija el perfil o la que la
+/// herramienta usa por defecto, según la biblioteca deteccion-agentes). Programator: la carpeta de
+/// su ejecutable fijado; nada sin él.
 #[must_use]
 pub fn carpeta_del_agente(
     perfil: &PerfilDeAgente,
     carpeta_personal: Option<&Path>,
 ) -> Option<PathBuf> {
     let personal = personal_o_tilde(carpeta_personal);
-    let por_defecto = |carpeta: &str| personal.join(carpeta);
     match perfil.tipo() {
-        HerramientaDelPerfil::Claude => Some(
-            perfil
-                .directorio_configuracion_expandido(&personal)
-                .unwrap_or_else(|| por_defecto(CARPETA_POR_DEFECTO_CLAUDE)),
-        ),
-        HerramientaDelPerfil::Codex => Some(
-            perfil
-                .directorio_configuracion_expandido(&personal)
-                .unwrap_or_else(|| por_defecto(CARPETA_POR_DEFECTO_CODEX)),
-        ),
-        HerramientaDelPerfil::Gemini => Some(por_defecto(CARPETA_POR_DEFECTO_AGY)),
         HerramientaDelPerfil::Programator => perfil
             .ejecutable_expandido(&personal)
             .and_then(|ejecutable| ejecutable.parent().map(Path::to_path_buf)),
+        HerramientaDelPerfil::Claude
+        | HerramientaDelPerfil::Codex
+        | HerramientaDelPerfil::Gemini => nucleo::cuentas::carpeta_de_la_cuenta(perfil, &personal),
     }
 }
 

@@ -47,7 +47,7 @@ A su lado está gestor-vigilante.exe en Windows, o gestor-vigilante en Linux, el
 
 La carpeta datos guarda tu configuración: la lista de proyectos, los perfiles de agente y los ajustes de funcionamiento. La crea y la rellena el programa. No la borres si quieres conservarla.
 
-La carpeta documentacion tiene tres documentos. Manual de uso explica todo el programa paso a paso y es el que conviene leer primero. Resolucion de problemas recoge lo que suele salir mal y cómo arreglarlo. Referencia de funcionalidades describe con detalle técnico todo lo que hace el programa.
+La carpeta documentacion tiene cuatro archivos. Manual de uso explica todo el programa paso a paso y es el que conviene leer primero. Resolucion de problemas recoge lo que suele salir mal y cómo arreglarlo. Referencia de funcionalidades describe con detalle técnico todo lo que hace el programa. Licencia.txt contiene el texto íntegro de la licencia.
 
 
 Llevártelo a otro ordenador

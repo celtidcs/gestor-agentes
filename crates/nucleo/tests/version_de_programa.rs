@@ -1,9 +1,9 @@
-//! Barreras de F7 (3.7.0): la versión del Programator de la ruta se lee del recurso de versión del
+//! Barreras de la versión de Programator, desde la 3.7.0: la versión del Programator de la ruta se lee del recurso de versión del
 //! ejecutable y se compara con la última publicada.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)]
 
-use nucleo::actualizaciones::{Publicacion, Version};
+use nucleo::actualizaciones::Version;
 use nucleo::version_de_programa::{mas_nueva, version_en_recurso};
 
 /// Trozo de un recurso de versión como el de programator.exe 0.12.0: la clave en UTF-16LE, su
@@ -23,22 +23,19 @@ fn ejecutable_con(valor: &str) -> Vec<u8> {
     bytes
 }
 
-fn publicada(version: &str) -> Publicacion {
-    Publicacion {
-        version: Version::leer(version).unwrap(),
-        enlace: String::from("https://github.com/celtidcs/Programator/releases/tag/v0.13.0"),
-    }
+fn publicada(version: &str) -> Version {
+    Version::desde_etiqueta(version).unwrap()
 }
 
 #[test]
 fn lee_la_version_del_producto_y_no_la_del_archivo() {
     assert_eq!(
         version_en_recurso(&ejecutable_con("0.12.0")),
-        Version::leer("0.12.0")
+        Version::desde_etiqueta("0.12.0")
     );
     assert_eq!(
         version_en_recurso(&ejecutable_con("0.12.0.0")),
-        Version::leer("0.12.0")
+        Version::desde_etiqueta("0.12.0")
     );
 }
 
@@ -50,12 +47,12 @@ fn sin_recurso_o_con_un_valor_raro_no_hay_version() {
 
 #[test]
 fn solo_hay_version_nueva_si_la_publicada_es_mayor() {
-    let instalada = Version::leer("0.12.0");
+    let instalada = Version::desde_etiqueta("0.12.0");
     assert_eq!(
-        mas_nueva(instalada, Some(&publicada("0.13.0"))),
-        Version::leer("0.13.0")
+        mas_nueva(instalada, Some(publicada("0.13.0"))),
+        Version::desde_etiqueta("0.13.0")
     );
-    assert_eq!(mas_nueva(instalada, Some(&publicada("0.12.0"))), None);
-    assert_eq!(mas_nueva(None, Some(&publicada("0.13.0"))), None);
+    assert_eq!(mas_nueva(instalada, Some(publicada("0.12.0"))), None);
+    assert_eq!(mas_nueva(None, Some(publicada("0.13.0"))), None);
     assert_eq!(mas_nueva(instalada, None), None);
 }

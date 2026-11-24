@@ -92,3 +92,24 @@ pub const fn color_de_estado(estado: EstadoDelAgente) -> Color32 {
         EstadoDelAgente::SinComprobar => GRIS,
     }
 }
+
+/// Separación pequeña entre bloques, en puntos.
+pub const ESPACIO_PEQUENO: f32 = 6.0;
+/// Separación normal entre bloques.
+pub const ESPACIO: f32 = 8.0;
+/// Separación entre los botones de un diálogo.
+pub const ESPACIO_ENTRE_BOTONES: f32 = 10.0;
+/// Separación grande, entre secciones.
+pub const ESPACIO_GRANDE: f32 = 12.0;
+/// Separación muy grande, antes de los botones de un diálogo.
+pub const ESPACIO_MUY_GRANDE: f32 = 16.0;
+/// Separación de las celdas de una tabla: horizontal y vertical.
+pub const ESPACIADO_DE_TABLA: [f32; 2] = [16.0, 6.0];
+/// Radio de las esquinas de un botón de color.
+pub const RADIO_DE_BOTON: u8 = 6;
+/// Puntos que el título de un diálogo crece sobre el texto normal.
+pub const AUMENTO_DEL_TITULO: f32 = 2.0;
+/// Columnas de botones de cada fila de la tabla de proyectos: abrir y quitar van en una.
+pub const COLUMNAS_DE_ACCION_DE_PROYECTOS: usize = 1;
+/// Columnas de botones de cada fila de la tabla de agentes: examinar y buscar.
+pub const COLUMNAS_DE_ACCION_DE_AGENTES: usize = 2;

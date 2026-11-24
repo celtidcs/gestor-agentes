@@ -147,17 +147,9 @@ pub fn documento() -> String {
 /// la viñeta ni la marca.
 #[must_use]
 pub fn candidatas(instrucciones: &str) -> Vec<String> {
-    let mut lineas = instrucciones.lines();
-    if lineas
-        .by_ref()
-        .find(|l| l.trim() == APARTADO_DE_REGLAS)
-        .is_none()
-    {
-        return Vec::new();
-    }
-    lineas
-        .take_while(|l| !l.trim_start().starts_with('#'))
-        .map(str::trim)
+    canal::apartados::lineas(instrucciones, APARTADO_DE_REGLAS)
+        .unwrap_or_default()
+        .into_iter()
         .filter_map(|l| l.strip_suffix(MARCA_DE_CANDIDATA))
         .map(|l| {
             l.trim_start_matches('-')

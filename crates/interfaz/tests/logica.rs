@@ -244,8 +244,11 @@ fn peticion_expande_la_carpeta_personal() {
     assert_eq!(peticion.nombre_proyecto, "Uno");
     assert_eq!(peticion.carpeta_proyecto, PathBuf::from("/p/uno"));
     assert_eq!(
-        peticion.directorio_configuracion,
-        Some(casa.join(".claude2"))
+        peticion.ajuste_de_entorno,
+        Some(lanzador::AjusteDeEntorno::Poner {
+            variable: "CLAUDE_CONFIG_DIR",
+            valor: casa.join(".claude2"),
+        })
     );
     assert_eq!(peticion.ejecutable, Some(casa.join("bin/claude")));
 }
@@ -272,13 +275,42 @@ fn peticion_lleva_el_mensaje_inicial_del_nucleo() {
 
 #[test]
 fn peticion_sin_carpeta_personal_deja_la_virgulilla_a_la_vista() {
-    let claude = perfil(HerramientaDelPerfil::Claude, 1).con_directorio("~/.claude");
+    let claude = perfil(HerramientaDelPerfil::Claude, 2).con_directorio("~/.claude2");
     let peticion = perfiles::peticion(&claude, "Uno", Path::new("/p/uno"), None);
     assert_eq!(
-        peticion.directorio_configuracion,
-        Some(Path::new("~").join(".claude"))
+        peticion.ajuste_de_entorno,
+        Some(lanzador::AjusteDeEntorno::Poner {
+            variable: "CLAUDE_CONFIG_DIR",
+            valor: Path::new("~").join(".claude2"),
+        })
     );
     assert_eq!(peticion.ejecutable, None);
+}
+
+/// La cuenta por defecto de Claude y de Codex se abre quitando su variable, también
+/// si el perfil guardado todavía fija «~/.claude» como hasta la 3.8; agy y Programator no tocan el
+/// entorno.
+#[test]
+fn peticion_de_la_cuenta_por_defecto_quita_la_variable() {
+    let casa = Some(Path::new("/home/u"));
+    let ajuste = |p: PerfilDeAgente| {
+        perfiles::peticion(&p, "Uno", Path::new("/p/uno"), casa).ajuste_de_entorno
+    };
+    let quitar = |variable| Some(lanzador::AjusteDeEntorno::Quitar { variable });
+    assert_eq!(
+        ajuste(perfil(HerramientaDelPerfil::Claude, 1)),
+        quitar("CLAUDE_CONFIG_DIR")
+    );
+    assert_eq!(
+        ajuste(perfil(HerramientaDelPerfil::Claude, 1).con_directorio("~/.claude")),
+        quitar("CLAUDE_CONFIG_DIR")
+    );
+    assert_eq!(
+        ajuste(perfil(HerramientaDelPerfil::Codex, 1)),
+        quitar("CODEX_HOME")
+    );
+    assert_eq!(ajuste(perfil(HerramientaDelPerfil::Gemini, 1)), None);
+    assert_eq!(ajuste(perfil(HerramientaDelPerfil::Programator, 1)), None);
 }
 
 // Textos con datos
@@ -380,7 +412,7 @@ fn claude_y_codex_exigen_su_carpeta_de_cuenta_en_todas_sus_instancias() {
         exigida(&con_carpeta(HerramientaDelPerfil::Codex, 3, "~/.codex3")),
         Some(casa.join(".codex3"))
     );
-    // F9: también la primera cuenta, y sin carpeta fijada la de la herramienta.
+    // También la primera cuenta, y sin carpeta fijada la de la herramienta.
     assert_eq!(
         exigida(&con_carpeta(HerramientaDelPerfil::Claude, 1, "~/.claude")),
         Some(casa.join(".claude"))
@@ -439,15 +471,18 @@ fn estado_del_agente_segun_lo_detectado() {
     let disponible = Disponibilidad::Disponible(PathBuf::from("/bin/x"));
     let sin_cuenta = Disponibilidad::SinCuenta(PathBuf::from("/h/.c"));
     let estado = perfiles::estado_del_agente;
-    assert_eq!(estado(Some(&disponible), false, false), Localizado);
-    assert_eq!(estado(Some(&sin_cuenta), false, false), FaltaLaCuenta);
+    let vigente = perfiles::Comprobacion::Vigente;
+    assert_eq!(estado(Some(&disponible), vigente), Localizado);
+    assert_eq!(estado(Some(&sin_cuenta), vigente), FaltaLaCuenta);
     assert_eq!(
-        estado(Some(&Disponibilidad::SinEjecutable), false, false),
+        estado(Some(&Disponibilidad::SinEjecutable), vigente),
         NoEncontrado
     );
-    assert_eq!(estado(None, false, false), SinComprobar);
-    assert_eq!(estado(Some(&disponible), true, false), SinComprobar);
-    assert_eq!(estado(Some(&disponible), false, true), SinComprobar);
+    assert_eq!(estado(None, vigente), SinComprobar);
+    assert_eq!(
+        estado(Some(&disponible), perfiles::Comprobacion::Pendiente),
+        SinComprobar
+    );
 }
 
 #[test]
@@ -606,4 +641,17 @@ fn unos_bytes_que_no_son_png_dan_error_y_no_panico() {
     assert!(icono::decodificar(b"no es un png").is_err());
     assert!(icono::decodificar(&icono::ICONO_PNG[..100]).is_err());
     assert!(icono::decodificar(&[]).is_err());
+}
+
+#[test]
+fn el_aviso_de_programator_antiguo_sale_entero_y_sin_espacios_de_mas() {
+    let Some(nueva) = nucleo::actualizaciones::Version::desde_etiqueta("v0.3.0") else {
+        return assert_eq!("v0.3.0", "una versión válida");
+    };
+    let texto = textos::programator_anticuado(nueva);
+    assert_eq!(
+        texto,
+        "la ruta de Programator apunta a una versión antigua; hay la 0.3.0: descárgala y cambia la ruta en la pestaña Agentes"
+    );
+    assert!(!texto.contains("  "), "{texto:?}");
 }

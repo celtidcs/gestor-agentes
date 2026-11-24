@@ -12,7 +12,9 @@ use lanzador::{ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento};
 use nucleo::actualizaciones::Version;
 use nucleo::agentes::IdentidadAgente;
 use nucleo::configuracion::{HerramientaDelPerfil, PerfilDeAgente};
-use nucleo::cuentas::{self, AltaRechazada, CarpetaPersonal};
+use nucleo::cuentas::{self, AltaRechazada, Cuenta};
+use nucleo::cuentas_de_agentes::CuentaManual;
+use nucleo::migracion_de_claude::{ErrorDeMigracion, MigracionHecha};
 use nucleo::proyecto::informe::{InformeDeInicializacion, TipoDeCambio};
 use nucleo::proyecto::papeles::Papel;
 
@@ -21,9 +23,6 @@ use crate::textos;
 
 /// Nombre del hilo de trabajo, para los volcados y los depuradores.
 const NOMBRE_DEL_HILO: &str = "gestor-agentes-trabajos";
-
-/// Estado del canal, donde se anota el papel elegido.
-const RUTA_DEL_ESTADO: &str = ".gestor/canal/estado.md";
 
 /// Trabajo que la ventana encarga.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +117,9 @@ pub enum ResultadoDeTrabajo {
         carpetas: Vec<Option<CarpetaDelAgente>>,
         /// Cuántos perfiles son nuevos y hay que guardar.
         anadidos: usize,
+        /// Cuántos perfiles han dejado de fijar la carpeta por defecto de su herramienta; también
+        /// hay que guardarlos, pero no son cuentas nuevas.
+        normalizados: usize,
     },
     /// La cuenta no se ha dado de alta: nada si el usuario canceló, o el motivo del rechazo.
     CuentaNoAnadida(Option<AltaRechazada>),
@@ -130,20 +132,20 @@ pub enum ResultadoDeTrabajo {
     },
 }
 
-/// Efectos sobre el sistema que necesitan los trabajos. Se inyecta para probar [`ejecutar`].
-pub trait Motor {
+/// Diálogos del sistema para elegir carpetas y archivos.
+pub trait SelectoresDeArchivo {
     /// Muestra el selector de carpetas y devuelve la elegida.
     fn elegir_carpeta(&self) -> Option<PathBuf>;
     /// Muestra el selector de archivos para un ejecutable y devuelve el elegido.
     fn elegir_ejecutable(&self) -> Option<PathBuf>;
     /// Muestra el selector de carpetas para la carpeta de una cuenta y devuelve la elegida.
     fn elegir_carpeta_de_cuenta(&self) -> Option<PathBuf>;
-    /// Versión que declara el ejecutable en su recurso de versión, si la lleva (ver
-    /// [`nucleo::version_de_programa::version_en_recurso`]).
-    fn version_del_ejecutable(&self, ruta: &Path) -> Option<Version>;
+}
+
+/// Preparación de un proyecto y anotación del papel elegido.
+pub trait PreparadorDeProyecto {
     /// Prepara el proyecto para la identidad indicada.
     fn preparar(&self, raiz: &Path, identidad: Option<IdentidadAgente>) -> InformeDeInicializacion;
-
     /// Anota en estado.md del proyecto el papel elegido para esa identidad. Devuelve si ha cambiado
     /// algo.
     ///
@@ -151,8 +153,10 @@ pub trait Motor {
     ///
     /// El error de disco al leer o escribir estado.md.
     fn anotar_papel(&self, raiz: &Path, identidad: &str, papel: Papel) -> std::io::Result<bool>;
-    /// Carpeta personal del usuario, para sustituir «~» en los perfiles.
-    fn carpeta_personal(&self) -> Option<PathBuf>;
+}
+
+/// Búsqueda, lectura de versión y apertura de los agentes.
+pub trait LanzadorDeAgentes {
     /// Decide cómo se abre la petición.
     ///
     /// # Errors
@@ -170,17 +174,23 @@ pub trait Motor {
         herramienta: Herramienta,
         ruta_fijada: Option<&Path>,
     ) -> Option<PathBuf>;
-    /// Carpetas de la carpeta personal que pueden ser de una cuenta (ver
-    /// [`nucleo::cuentas::explorar`]).
-    fn explorar_cuentas(&self, carpeta_personal: &Path) -> Vec<CarpetaPersonal>;
-    /// Indica si existe la carpeta.
-    fn existe_carpeta(&self, ruta: &Path) -> bool;
+    /// Versión que declara el ejecutable en su recurso de versión, si la lleva (ver
+    /// [`nucleo::version_de_programa::version_en_recurso`]).
+    fn version_del_ejecutable(&self, ruta: &Path) -> Option<Version>;
     /// Abre el plan.
     ///
     /// # Errors
     ///
     /// Los de [`lanzador::ejecutar`].
     fn ejecutar(&self, plan: &lanzador::PlanDeLanzamiento) -> Result<(), ErrorDeLanzamiento>;
+}
+
+/// Disco y carpeta personal: medir, comprobar, borrar, buscar cuentas y migrar el estado de Claude 1.
+pub trait DiscoDelMotor {
+    /// Carpeta personal del usuario, para sustituir «~» en los perfiles.
+    fn carpeta_personal(&self) -> Option<PathBuf>;
+    /// Indica si existe la carpeta.
+    fn existe_carpeta(&self, ruta: &Path) -> bool;
     /// Borra una carpeta con todo su contenido.
     ///
     /// # Errors
@@ -189,6 +199,34 @@ pub trait Motor {
     fn borrar_carpeta(&self, ruta: &Path) -> std::io::Result<()>;
     /// Bytes que mide un archivo; nada si no existe o no se puede leer.
     fn tamano(&self, ruta: &Path) -> Option<u64>;
+    /// Cuentas de los agentes en el equipo, encontradas por la biblioteca deteccion-agentes en
+    /// `carpeta_personal` y en las variables del proceso, más las `manuales` de los perfiles (ver
+    /// [`nucleo::cuentas_de_agentes::cuentas_del_equipo`]).
+    fn cuentas_del_equipo(&self, carpeta_personal: &Path, manuales: &[CuentaManual])
+        -> Vec<Cuenta>;
+    /// Hace, si toca, la migración única del estado de Claude 1 (ver
+    /// [`nucleo::migracion_de_claude`]) y devuelve lo hecho, nada si no tocaba o el error.
+    ///
+    /// # Errors
+    ///
+    /// El texto del fallo, con el archivo que no se pudo copiar o escribir.
+    fn migrar_estado_de_claude(
+        &self,
+        carpeta_personal: &Path,
+    ) -> Result<Option<MigracionHecha>, ErrorDeMigracion>;
+}
+
+/// Efectos sobre el sistema que necesitan los trabajos. Se inyecta para probar [`ejecutar`].
+///
+/// Junta los rasgos pequeños; cada función de este módulo pide solo los que usa.
+pub trait Motor:
+    SelectoresDeArchivo + PreparadorDeProyecto + LanzadorDeAgentes + DiscoDelMotor
+{
+}
+
+impl<T: SelectoresDeArchivo + PreparadorDeProyecto + LanzadorDeAgentes + DiscoDelMotor> Motor
+    for T
+{
 }
 
 /// Hace un trabajo. El proyecto se prepara siempre antes de abrirlo, y se abre aunque la
@@ -209,16 +247,25 @@ pub fn ejecutar(trabajo: Trabajo, motor: &dyn Motor) -> ResultadoDeTrabajo {
                 .and_then(|archivo| motor.tamano(&carpeta.join(archivo)));
             let personal = motor.carpeta_personal();
             let peticion = perfiles::peticion(&perfil, &nombre, &carpeta, personal.as_deref());
+            migrar_si_es_la_cuenta_por_defecto_de_claude(
+                &peticion,
+                personal.as_deref(),
+                motor,
+                &mut informe,
+            );
             if let Some(papel) = papel {
                 match motor.anotar_papel(&carpeta, &peticion.identidad, papel) {
                     Ok(true) => informe.anotar_cambio(
-                        RUTA_DEL_ESTADO,
+                        canal::contrato::ruta_relativa_del_estado(),
                         TipoDeCambio::Actualizado,
                         Some(textos::papel_anotado(&peticion.identidad, papel)),
                     ),
                     Ok(false) => {}
                     Err(error) => {
-                        informe.anotar_error(format!("{RUTA_DEL_ESTADO}: {error}"));
+                        informe.anotar_error(format!(
+                            "{}: {error}",
+                            canal::contrato::ruta_relativa_del_estado()
+                        ));
                     }
                 }
             }
@@ -255,8 +302,46 @@ pub fn ejecutar(trabajo: Trabajo, motor: &dyn Motor) -> ResultadoDeTrabajo {
     }
 }
 
+/// Antes de abrir la cuenta por defecto de Claude Code (la que se abre quitando CLAUDE_CONFIG_DIR),
+/// hace la migración única de su estado y la anota en el informe como un archivo sustituido, que
+/// abre la ventana del informe para que el Director la vea. Un fallo se anota como error, que
+/// también la abre, y no impide abrir.
+fn migrar_si_es_la_cuenta_por_defecto_de_claude(
+    peticion: &PeticionDeLanzamiento,
+    personal: Option<&Path>,
+    motor: &dyn Motor,
+    informe: &mut InformeDeInicializacion,
+) {
+    let es_la_por_defecto_de_claude = peticion.herramienta == Herramienta::Claude
+        && matches!(
+            peticion.ajuste_de_entorno,
+            Some(lanzador::AjusteDeEntorno::Quitar { .. })
+        );
+    let Some(personal) = personal.filter(|_| es_la_por_defecto_de_claude) else {
+        return;
+    };
+    match motor.migrar_estado_de_claude(personal) {
+        Ok(Some(hecha)) => informe.anotar_cambio(
+            hecha.rutas.destino.display().to_string(),
+            TipoDeCambio::Sustituido,
+            Some(textos::estado_de_claude_migrado(
+                &hecha,
+                &peticion.identidad,
+            )),
+        ),
+        Ok(None) => {}
+        Err(error) => informe.anotar_error(textos::estado_de_claude_sin_migrar(
+            &error,
+            &peticion.identidad,
+        )),
+    }
+}
+
 /// Planifica y abre.
-fn lanzar(peticion: &PeticionDeLanzamiento, motor: &dyn Motor) -> Lanzamiento {
+fn lanzar(
+    peticion: &PeticionDeLanzamiento,
+    motor: &(impl LanzadorDeAgentes + ?Sized),
+) -> Lanzamiento {
     match motor
         .planificar(peticion)
         .and_then(|plan| motor.ejecutar(&plan))
@@ -266,30 +351,56 @@ fn lanzar(peticion: &PeticionDeLanzamiento, motor: &dyn Motor) -> Lanzamiento {
     }
 }
 
-/// Añade las cuentas instaladas que falten (sin carpeta personal no se buscan) y calcula la
+/// Pone los perfiles al día con las cuentas del equipo (ver [`incorporar_y_buscar`]) y calcula la
 /// disponibilidad de cada perfil.
 fn detectar(mut lista: Vec<PerfilDeAgente>, motor: &dyn Motor) -> ResultadoDeTrabajo {
     let personal = motor.carpeta_personal();
-    let anadidos = personal.as_deref().map_or(0, |carpeta| {
-        cuentas::incorporar(
-            &mut lista,
-            cuentas::perfiles_de_cuentas(&motor.explorar_cuentas(carpeta)),
-        )
-    });
+    let (incorporacion, _) = incorporar_y_buscar(&mut lista, personal.as_deref(), motor);
+    detectado(lista, incorporacion, personal.as_deref(), motor)
+}
+
+/// Resultado de una detección: los perfiles ya puestos al día, con la disponibilidad y la carpeta
+/// de cada uno.
+fn detectado(
+    lista: Vec<PerfilDeAgente>,
+    incorporacion: cuentas::Incorporacion,
+    personal: Option<&Path>,
+    motor: &dyn Motor,
+) -> ResultadoDeTrabajo {
     let (disponibilidad, carpetas) = lista
         .iter()
-        .map(|perfil| detectar_perfil(perfil, personal.as_deref(), motor))
+        .map(|perfil| detectar_perfil(perfil, personal, motor))
         .unzip();
     ResultadoDeTrabajo::Detectado {
         perfiles: lista,
         disponibilidad,
         carpetas,
-        anadidos,
+        anadidos: incorporacion.anadidos,
+        normalizados: incorporacion.normalizados,
     }
 }
 
-/// Pide la carpeta de la cuenta, la da de alta (ver [`cuentas::dar_de_alta`]) y vuelve a buscar
-/// los agentes, contando el perfil nuevo entre los que hay que guardar.
+/// Busca las cuentas del equipo y pone los perfiles al día (ver [`cuentas::incorporar_cuentas`]).
+/// Devuelve los cambios y las cuentas encontradas. Sin carpeta personal no se busca nada.
+fn incorporar_y_buscar(
+    lista: &mut Vec<PerfilDeAgente>,
+    personal: Option<&Path>,
+    motor: &dyn Motor,
+) -> (cuentas::Incorporacion, Vec<Cuenta>) {
+    let Some(personal) = personal else {
+        return (cuentas::Incorporacion::default(), Vec::new());
+    };
+    let encontradas = motor.cuentas_del_equipo(personal, &cuentas::manuales_de(lista, personal));
+    (
+        cuentas::incorporar_cuentas(lista, &encontradas, personal),
+        encontradas,
+    )
+}
+
+/// Pide la carpeta de la cuenta, pone los perfiles al día con las cuentas del equipo, la da de
+/// alta (ver [`cuentas::dar_de_alta`]) y calcula la disponibilidad con el perfil nuevo, contado
+/// entre los que hay que guardar. Busca en el disco una sola vez. Sin carpeta personal no se puede
+/// validar la carpeta y se rechaza.
 fn dar_de_alta_cuenta(
     herramienta: HerramientaDelPerfil,
     mut lista: Vec<PerfilDeAgente>,
@@ -298,24 +409,17 @@ fn dar_de_alta_cuenta(
     let Some(carpeta) = motor.elegir_carpeta_de_cuenta() else {
         return ResultadoDeTrabajo::CuentaNoAnadida(None);
     };
-    let personal = motor.carpeta_personal().unwrap_or_default();
-    if let Err(rechazo) = cuentas::dar_de_alta(&mut lista, herramienta, &carpeta, &personal) {
+    let Some(personal) = motor.carpeta_personal() else {
+        return ResultadoDeTrabajo::CuentaNoAnadida(Some(AltaRechazada::SinCarpetaPersonal));
+    };
+    let (mut incorporacion, encontradas) = incorporar_y_buscar(&mut lista, Some(&personal), motor);
+    if let Err(rechazo) =
+        cuentas::dar_de_alta(&mut lista, herramienta, &carpeta, &personal, &encontradas)
+    {
         return ResultadoDeTrabajo::CuentaNoAnadida(Some(rechazo));
     }
-    match detectar(lista, motor) {
-        ResultadoDeTrabajo::Detectado {
-            perfiles,
-            disponibilidad,
-            carpetas,
-            anadidos,
-        } => ResultadoDeTrabajo::Detectado {
-            perfiles,
-            disponibilidad,
-            carpetas,
-            anadidos: anadidos + 1,
-        },
-        otro => otro,
-    }
+    incorporacion.anadidos += 1;
+    detectado(lista, incorporacion, Some(&personal), motor)
 }
 
 /// Disponibilidad de un perfil y carpeta donde vive. La carpeta se mira una sola vez en el disco

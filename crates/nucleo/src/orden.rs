@@ -1,4 +1,4 @@
-//! Orden de la lista de proyectos y comparación de rutas.
+//! Orden de la lista de proyectos, comparación de sus rutas y nombre de un proyecto nuevo.
 //!
 //! La 2.3.2 ordenaba con la cultura del usuario sin distinguir mayúsculas, para que «Álvaro»
 //! fuera junto a «Alba». Rust no trae las tablas de ordenación de cada idioma, así que aquí se
@@ -70,4 +70,15 @@ pub fn misma_ruta(a: &str, b: &str) -> bool {
         && a.chars()
             .zip(b.chars())
             .all(|(x, y)| x == y || x.to_uppercase().eq(y.to_uppercase()))
+}
+
+/// Nombre de un proyecto nuevo: el último componente de su carpeta, sin separadores finales.
+#[must_use]
+pub fn nombre_de_carpeta(ruta: &str) -> String {
+    let sin_separador = ruta.trim_end_matches(['/', '\\']);
+    sin_separador
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(sin_separador)
+        .to_owned()
 }

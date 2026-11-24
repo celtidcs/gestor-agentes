@@ -10,6 +10,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+canal = { path = "../canal" }
+# Solo los tipos de la cuenta que se abre (AjusteDeEntorno), sin buscar cuentas: la búsqueda
+# es cosa del módulo cuentas_de_agentes de nucleo.
+deteccion-agentes = { path = "../../bibliotecas/deteccion-agentes" }
 serde_json = "1"
 thiserror = "2"
 

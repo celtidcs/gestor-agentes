@@ -13,7 +13,7 @@ mod comun;
 use std::path::PathBuf;
 
 use comun::{guion_bash, guion_powershell, peticion, plan, textos, EntornoDeEnsayo};
-use lanzador::{ErrorDeLanzamiento, Herramienta, Sistema};
+use lanzador::{AjusteDeEntorno, ErrorDeLanzamiento, Herramienta, Sistema};
 
 /// Parte fija del principio del guion de PowerShell, tras el título.
 const TEMPORIZADOR: &str = "[Console]::Title = $t; Add-Type -TypeDefinition 'public static class GestorAgentesTitulo { static System.Threading.Timer reloj; public static void Fijar(string titulo) { reloj = new System.Threading.Timer(estado => System.Console.Title = titulo, null, 0, 1000); } public static void Parar() { if (reloj != null) { reloj.Dispose(); } } }'; [GestorAgentesTitulo]::Fijar($t); ";
@@ -25,7 +25,10 @@ const FINAL_POWERSHELL: &str = "; [GestorAgentesTitulo]::Parar(); [Console]::Tit
 fn windows_abre_powershell_con_el_guion_completo() {
     let mut p = peticion(Herramienta::Claude);
     p.carpeta_proyecto = PathBuf::from(r"C:\proyectos\Demo");
-    p.directorio_configuracion = Some(PathBuf::from(r"C:\Users\usuario\.claude2"));
+    p.ajuste_de_entorno = Some(AjusteDeEntorno::Poner {
+        variable: "CLAUDE_CONFIG_DIR",
+        valor: PathBuf::from(r"C:\Users\usuario\.claude2"),
+    });
     p.ejecutable = Some(PathBuf::from(r"C:\herramientas\claude.exe"));
     let entorno = EntornoDeEnsayo::default().con_archivo(r"C:\herramientas\claude.exe");
     let plan = plan(&p, Sistema::Windows, &entorno);
@@ -62,10 +65,42 @@ fn sin_carpeta_de_configuracion_no_se_fija_claude_config_dir_ni_se_crea_nada() {
     assert!(linux.carpetas_a_crear.is_empty());
 }
 
+/// La cuenta por defecto se abre quitando CLAUDE_CONFIG_DIR, antes de asignar
+/// las demás variables, para que Claude Code no herede la que tenga puesta Gestor.
+#[test]
+fn la_cuenta_por_defecto_quita_claude_config_dir_antes_de_las_variables() {
+    let mut p = peticion(Herramienta::Claude);
+    p.ajuste_de_entorno = Some(AjusteDeEntorno::Quitar {
+        variable: "CLAUDE_CONFIG_DIR",
+    });
+    p.ejecutable = Some(PathBuf::from("claude"));
+    let entorno = EntornoDeEnsayo::default().con_archivo("claude");
+    let windows = guion_powershell(&plan(&p, Sistema::Windows, &entorno));
+    let quitar = windows
+        .find("Remove-Item -LiteralPath 'Env:CLAUDE_CONFIG_DIR' -ErrorAction SilentlyContinue; ")
+        .expect("quita la variable en PowerShell");
+    let primera = windows
+        .find("$env:GESTOR_AGENTE")
+        .expect("asigna la identidad");
+    assert!(quitar < primera, "{windows}");
+    assert!(!windows.contains("$env:CLAUDE_CONFIG_DIR"), "{windows}");
+    let linux_plan = plan(&p, Sistema::Linux, &entorno);
+    let linux = guion_bash(&linux_plan);
+    assert!(
+        linux.starts_with("unset CLAUDE_CONFIG_DIR; export GESTOR_AGENTE="),
+        "{linux}"
+    );
+    assert!(!linux.contains("export CLAUDE_CONFIG_DIR"), "{linux}");
+    assert!(linux_plan.carpetas_a_crear.is_empty());
+}
+
 #[test]
 fn linux_abre_gnome_terminal_si_esta_con_el_guion_completo() {
     let mut p = peticion(Herramienta::Claude);
-    p.directorio_configuracion = Some(PathBuf::from("/home/usuario/.claude2"));
+    p.ajuste_de_entorno = Some(AjusteDeEntorno::Poner {
+        variable: "CLAUDE_CONFIG_DIR",
+        valor: PathBuf::from("/home/usuario/.claude2"),
+    });
     p.ejecutable = Some(PathBuf::from("/home/usuario/.local/bin/claude"));
     let entorno = EntornoDeEnsayo::default()
         .con_path("/usr/bin")

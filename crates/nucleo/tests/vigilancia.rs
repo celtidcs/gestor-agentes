@@ -84,3 +84,46 @@ fn cuenta_los_encargos_avisados_despues_del_acuse() {
     assert_eq!(vigilancia::encargos_sin_acuse(avisos, Some(100)), 1);
     assert_eq!(vigilancia::encargos_sin_acuse(avisos, Some(300)), 0);
 }
+
+#[test]
+fn la_vigilancia_de_un_agente_se_compone_sin_disco_ni_procesos() {
+    let vivo = "{\"identidad\":\"Codex 1\",\"pid\":42,\"arranque\":1000,\"modo\":\"persistente\",\"desde\":1000}\n";
+    let avisos = "2000\tencargo\tclaude2.md\tentregado\n3000\tmutacion\testado.md\tentregado\n";
+    let datos = vigilancia::DatosDeVigilancia {
+        identificador: "codex",
+        vivo: Some(vivo),
+        avisos: Some(avisos),
+        ultimo_acuse: Some(1_500),
+    };
+    let mut preguntado = Vec::new();
+    let vigilando = vigilancia::vigilancia_de_agente(&datos, &mut |anotado: &VigilanteAnotado| {
+        preguntado.push((anotado.pid, anotado.arranque));
+        true
+    })
+    .expect("hay vigilante");
+    assert_eq!(preguntado, vec![(42, 1000)]);
+    assert_eq!(vigilando.identificador, "codex");
+    assert_eq!(
+        vigilando.vigilante,
+        Some(vigilancia::EstadoDelVigilante::Vigilando)
+    );
+    assert_eq!(
+        vigilando.encargos_sin_acuse, 1,
+        "la mutación no es un encargo"
+    );
+
+    let caido = vigilancia::vigilancia_de_agente(&datos, &mut |_: &VigilanteAnotado| false)
+        .expect("hay vigilante");
+    assert_eq!(caido.vigilante, Some(vigilancia::EstadoDelVigilante::Caido));
+
+    let acusado = vigilancia::DatosDeVigilancia {
+        vivo: None,
+        ultimo_acuse: Some(2_500),
+        ..datos
+    };
+    assert_eq!(
+        vigilancia::vigilancia_de_agente(&acusado, &mut |_: &VigilanteAnotado| true),
+        None,
+        "sin vigilante ni encargos pendientes no sale en el panel"
+    );
+}

@@ -98,8 +98,8 @@ fn el_arranque_manda_leer_los_avisos() {
 #[test]
 fn claude_code_y_agy_esperan_al_cambio_y_la_pasada_unica_es_el_ultimo_recurso() {
     // Desde la 3.5.0, agy espera al cambio, que termina con el primer encargo y lo despierta; desde
-    // la 3.5.1, Claude Code también, en lugar del Monitor continuo que dejaba procesos huérfanos
-    // (orden del Director del 2026-11-18). Desde la 3.6.0 lo hace el ejecutable gestor-vigilante.
+    // la 3.5.1, Claude Code también, en lugar del Monitor continuo que dejaba procesos huérfanos.
+    // Desde la 3.6.0 lo hace el ejecutable gestor-vigilante.
     let cabecera = plantillas::cabecera();
     let linea = cabecera
         .lines()

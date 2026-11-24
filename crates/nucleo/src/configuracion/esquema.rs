@@ -20,6 +20,12 @@ const MODO_TERMINAL_ANTIGUO: &str = "Terminal";
 /// Versión que se supone si el archivo de versión no existe o no se entiende.
 pub(super) const VERSION_SIN_ARCHIVO: u32 = 1;
 
+/// Versión del esquema que trajo el perfil de Gemini.
+const VERSION_CON_GEMINI: u32 = 2;
+
+/// Versión del esquema que trajo el perfil de Programator.
+const VERSION_CON_PROGRAMATOR: u32 = 3;
+
 /// Perfil tal como puede venir del archivo, con el campo Modo de los esquemas anteriores al 4,
 /// que solo se lee para fundir perfiles al migrar y ya no se escribe.
 #[derive(Deserialize)]
@@ -104,8 +110,8 @@ fn fundir_modos(guardados: Vec<PerfilGuardado>) -> Vec<PerfilDeAgente> {
 /// Añade las herramientas que trajo cada esquema posterior a `version`, si faltan.
 fn anadir_perfiles_nuevos(perfiles: &mut Vec<PerfilDeAgente>, version: u32) {
     let nuevas = [
-        (2, HerramientaDelPerfil::Gemini),
-        (3, HerramientaDelPerfil::Programator),
+        (VERSION_CON_GEMINI, HerramientaDelPerfil::Gemini),
+        (VERSION_CON_PROGRAMATOR, HerramientaDelPerfil::Programator),
     ];
     for (desde, herramienta) in nuevas {
         if version < desde && !perfiles.iter().any(|p| p.tipo() == herramienta) {

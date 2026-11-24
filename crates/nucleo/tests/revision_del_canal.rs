@@ -246,3 +246,69 @@ fn el_inicializador_pone_los_avisos_del_canal_en_su_informe() {
         informe.avisos()
     );
 }
+
+#[test]
+fn el_panel_ve_al_jefe_que_anota_la_ventana_y_al_que_lo_releva() {
+    use nucleo::proyecto::papeles::{self, Papel};
+
+    let plantilla = plantillas::esqueleto_gestor(EsqueletoGestor::Estado, None);
+    let con_jefe =
+        papeles::anotar_papel(&plantilla, "Claude 2", Papel::Jefe, "2026-11-23 09:00:00")
+            .expect("anota el papel");
+    assert_eq!(
+        revision_del_canal::resumir(&con_jefe, &[]).jefe.as_deref(),
+        Some("Claude 2"),
+        "la línea de la ventana manda sobre «sin asignar»"
+    );
+
+    let relevado = papeles::anotar_papel(&con_jefe, "Codex 1", Papel::Jefe, "2026-11-23 10:00:00")
+        .expect("anota el relevo");
+    assert_eq!(
+        revision_del_canal::resumir(&relevado, &[]).jefe.as_deref(),
+        Some("Codex 1"),
+        "vale la línea más reciente"
+    );
+
+    let degradado =
+        papeles::anotar_papel(&relevado, "Codex 1", Papel::Ayudante, "2026-11-23 11:00:00")
+            .expect("anota el cambio");
+    assert_eq!(revision_del_canal::resumir(&degradado, &[]).jefe, None);
+}
+
+#[test]
+fn el_jefe_que_anota_la_ventana_releva_al_de_la_plantilla() {
+    use nucleo::proyecto::papeles::{self, Papel};
+
+    let anterior = plantillas::esqueleto_gestor(EsqueletoGestor::Estado, None).replace(
+        "- Jefe de proyecto: sin asignar",
+        "- Jefe de proyecto: Claude 1",
+    );
+    assert_eq!(
+        revision_del_canal::resumir(&anterior, &[]).jefe.as_deref(),
+        Some("Claude 1")
+    );
+    let relevado = papeles::anotar_papel(&anterior, "Claude 2", Papel::Jefe, "2026-11-23 09:00:00")
+        .expect("anota el papel");
+    assert_eq!(
+        revision_del_canal::resumir(&relevado, &[]).jefe.as_deref(),
+        Some("Claude 2")
+    );
+}
+
+#[test]
+fn las_rutas_de_gestor_coinciden_con_el_contrato_del_canal() {
+    use canal::contrato;
+
+    assert_eq!(
+        nucleo::agentes::CARPETA_CANAL,
+        format!("{}/{}", contrato::CARPETA_GESTOR, contrato::CARPETA_CANAL)
+    );
+    assert_eq!(
+        nucleo::proyecto::vigilante::CARPETA_DEL_VIGILANTE,
+        format!(
+            "{}/{}",
+            contrato::CARPETA_GESTOR,
+            contrato::CARPETA_DEL_VIGILANTE
+        )
+    );
+}

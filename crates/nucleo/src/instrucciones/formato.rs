@@ -11,6 +11,12 @@ const BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
 /// Marca de orden de bytes ya decodificada como carácter.
 const BOM_DECODIFICADO: char = '\u{FEFF}';
 
+/// El texto sin la marca de orden de bytes del principio, si la tiene.
+#[must_use]
+pub fn quitar_bom(texto: &str) -> &str {
+    texto.trim_start_matches(BOM_DECODIFICADO)
+}
+
 /// Formato de un archivo. El valor por defecto, UTF-8 sin BOM con saltos \n, es el de los
 /// archivos nuevos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

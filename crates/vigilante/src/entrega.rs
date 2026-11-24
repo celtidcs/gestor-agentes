@@ -7,8 +7,9 @@
 //! cada argumento va aparte y el texto no lleva nada del canal salvo los nombres de archivo, que
 //! se filtran.
 
+use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -17,15 +18,14 @@ use canal::identidad::Identidad;
 /// Variable con la sesión de Codex en las órdenes que ejecuta Codex.
 pub const VARIABLE_DE_LA_SESION: &str = "CODEX_THREAD_ID";
 
-/// Segundos mínimos entre dos entregas, para no llenar la sesión de avisos repetidos (límite que
-/// fijó el Jefe de otro proyecto el 2026-11-18 en 120 s; el Director pidió el 2026-11-22 que un
-/// segundo encargo no tarde dos minutos en llegar, y se bajó a 30 s). Los avisos que llegan
+/// Segundos mínimos entre dos entregas, para no llenar la sesión de avisos repetidos sin que un
+/// segundo encargo tarde demasiado en llegar (antes de la 3.7.0 eran 120 s). Los avisos que llegan
 /// mientras tanto se juntan en una sola entrega.
 pub const MINIMO_ENTRE_ENTREGAS_SEGUNDOS: u64 = 30;
 
 /// Segundos que se espera a `codex queue` antes de darlo por fallido: una orden atascada no puede
 /// parar la vigilancia (el mismo tope que el puente probado).
-const ESPERA_MAXIMA: Duration = Duration::from_secs(30);
+pub const ESPERA_MAXIMA: Duration = Duration::from_secs(30);
 
 /// Cada cuánto se mira si `codex queue` ha terminado.
 const CADENCIA_DE_ESPERA: Duration = Duration::from_millis(200);
@@ -204,32 +204,58 @@ pub fn entregar(codex: &Path, raiz: &Path, hilo: &str, mensaje: &str) -> Resulta
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn();
-    let mut hijo = match hijo {
-        Ok(hijo) => hijo,
-        Err(error) => return ResultadoDeEntrega::NoAcreditada(format!("no se lanzó: {error}")),
-    };
+    match hijo {
+        Ok(hijo) => match esperar_salida(hijo, ESPERA_MAXIMA) {
+            Ok((codigo, salida)) => interpretar_salida(codigo, &salida),
+            Err(motivo) => ResultadoDeEntrega::NoAcreditada(motivo),
+        },
+        Err(error) => ResultadoDeEntrega::NoAcreditada(format!("no se lanzó: {error}")),
+    }
+}
+
+/// Espera a que `hijo` termine, como mucho `espera`, y devuelve su código y su salida, la normal
+/// y la de error juntas. Las dos se leen en hilos aparte mientras tanto: si nadie las vaciara, un
+/// hijo que escribe más de lo que cabe en la tubería se quedaría bloqueado hasta el tiempo máximo.
+///
+/// # Errors
+///
+/// El motivo, si no termina a tiempo o no se puede saber si ha terminado.
+pub fn esperar_salida(mut hijo: Child, espera: Duration) -> Result<(Option<i32>, String), String> {
+    let lector_salida = hijo.stdout.take().map(leer_en_hilo);
+    let lector_error = hijo.stderr.take().map(leer_en_hilo);
     let inicio = Instant::now();
-    loop {
+    let estado = loop {
         match hijo.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if inicio.elapsed() < ESPERA_MAXIMA => thread::sleep(CADENCIA_DE_ESPERA),
+            Ok(Some(estado)) => break estado,
+            Ok(None) if inicio.elapsed() < espera => thread::sleep(CADENCIA_DE_ESPERA),
             Ok(None) => {
+                // Si ya terminó entre la comprobación y la orden de parar, kill falla y da igual.
                 let _ = hijo.kill();
                 let _ = hijo.wait();
-                return ResultadoDeEntrega::NoAcreditada(String::from("sin respuesta en 30 s"));
+                return Err(format!("sin respuesta en {} s", espera.as_secs()));
             }
-            Err(error) => return ResultadoDeEntrega::NoAcreditada(error.to_string()),
+            Err(error) => return Err(error.to_string()),
         }
-    }
-    match hijo.wait_with_output() {
-        Ok(salida) => {
-            let texto = format!(
-                "{}\n{}",
-                String::from_utf8_lossy(&salida.stdout),
-                String::from_utf8_lossy(&salida.stderr)
-            );
-            interpretar_salida(salida.status.code(), &texto)
-        }
-        Err(error) => ResultadoDeEntrega::NoAcreditada(error.to_string()),
-    }
+    };
+    let salida = format!("{}\n{}", recoger(lector_salida), recoger(lector_error));
+    Ok((estado.code(), salida))
+}
+
+/// Lee una tubería entera en un hilo aparte.
+fn leer_en_hilo<R: Read + Send + 'static>(mut tuberia: R) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        // Un error de lectura deja lo leído hasta entonces; la salida solo sirve para interpretar
+        // el resultado y anotarlo.
+        let _ = tuberia.read_to_end(&mut bytes);
+        bytes
+    })
+}
+
+/// Lo que leyó un hilo, como texto.
+fn recoger(lector: Option<thread::JoinHandle<Vec<u8>>>) -> String {
+    lector
+        .and_then(|hilo| hilo.join().ok())
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .unwrap_or_default()
 }

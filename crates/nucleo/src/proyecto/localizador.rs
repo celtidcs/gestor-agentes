@@ -8,11 +8,15 @@
 
 use std::path::{Path, PathBuf};
 
-use super::archivos;
+use super::{archivos, catalogo};
 use crate::instrucciones::marcas;
 
 /// Nombres que se buscan en cada carpeta superior, en este orden.
-const NOMBRES_CANDIDATOS: [&str; 3] = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
+const NOMBRES_CANDIDATOS: [&str; 3] = [
+    catalogo::RUTA_PUNTERO_CLAUDE,
+    catalogo::RUTA_REGLAS,
+    catalogo::RUTA_GEMINI_ANTERIOR,
+];
 
 /// Instrucciones del espacio de trabajo encontradas.
 #[derive(Debug, Clone, PartialEq, Eq)]

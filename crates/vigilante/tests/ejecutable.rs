@@ -157,6 +157,23 @@ fn esperar_archivo(ruta: &Path) -> bool {
     false
 }
 
+/// Espera a que el archivo tenga al menos una línea completa y la devuelve con todo su texto.
+/// El vigilante crea el registro y escribe la línea en dos pasos, así que basta con que exista
+/// para leerlo vacío.
+fn esperar_linea(ruta: &Path) -> Option<String> {
+    let mut esperado = Duration::ZERO;
+    while esperado < ESPERA_MAXIMA {
+        if let Ok(texto) = fs::read_to_string(ruta) {
+            if texto.contains('\n') {
+                return Some(texto);
+            }
+        }
+        thread::sleep(PASO_DE_ESPERA);
+        esperado += PASO_DE_ESPERA;
+    }
+    None
+}
+
 #[test]
 fn una_pasada_avisa_de_lo_ajeno_y_nunca_de_la_bandeja_propia() {
     let proyecto = Proyecto::new();
@@ -549,8 +566,7 @@ fn persistente_entrega_cada_encargo_y_lo_anota() {
         "# Bandeja\n\nPara Claude 2: encargo.\n",
     );
     let avisos = proyecto.ruta.join(".gestor/claude2/vigilante/avisos.log");
-    assert!(esperar_archivo(&avisos), "no intentó la entrega");
-    let texto = fs::read_to_string(&avisos).unwrap();
+    let texto = esperar_linea(&avisos).expect("no intentó la entrega");
     assert!(
         texto.contains("\tencargo\tcodex.md\tno acreditado: código Some(2)"),
         "{texto}"

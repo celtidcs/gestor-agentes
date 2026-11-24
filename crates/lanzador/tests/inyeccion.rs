@@ -21,7 +21,7 @@ use comun::{
     con_su_ejecutable, guion_bash, guion_powershell, peticion, plan, CarpetaTemporal,
     EntornoDeEnsayo, PROYECTO_AGY,
 };
-use lanzador::{Herramienta, Sistema};
+use lanzador::{AjusteDeEntorno, Herramienta, Sistema};
 
 /// Comillas que PowerShell toma por comilla simple.
 const COMILLAS_POWERSHELL: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
@@ -123,7 +123,10 @@ fn powershell_cada_dato_hostil_queda_en_un_solo_literal_intacto() {
         p.carpeta_proyecto = PathBuf::from(&carpeta);
         p.nombre_proyecto = nombre.clone();
         p.identidad = format!("Claude {nombre}");
-        p.directorio_configuracion = Some(PathBuf::from(format!(r"C:\cfg\{nombre}")));
+        p.ajuste_de_entorno = Some(AjusteDeEntorno::Poner {
+            variable: "CLAUDE_CONFIG_DIR",
+            valor: PathBuf::from(format!(r"C:\cfg\{nombre}")),
+        });
         p.ejecutable = Some(PathBuf::from(format!(r"C:\bin\{nombre}\claude.exe")));
         let guion = guion_powershell(&plan(&p, Sistema::Windows, &con_su_ejecutable(&p)));
 

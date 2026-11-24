@@ -6,12 +6,12 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use crate::terminal::{self, Asignacion, TERMINALES_LINUX};
+use crate::terminal::{self, Asignacion, PrevioDeTerminal, TERMINALES_LINUX};
 use crate::textos;
 use crate::toml::cadena_toml;
 use crate::{
-    EntornoDelSistema, ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento, PlanDeLanzamiento,
-    Sistema, VARIABLE_IDENTIDAD, VARIABLE_PROYECTO,
+    AjusteDeEntorno, EntornoDelSistema, ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento,
+    PlanDeLanzamiento, Sistema, VARIABLE_IDENTIDAD, VARIABLE_PROYECTO,
 };
 
 /// Nombre del ejecutable de Claude Code, sin extensión.
@@ -45,10 +45,6 @@ const SEPARADOR_TITULO: &str = " · ";
 /// Variable que, vacía, evita que Claude Code se crea anidado si la app se abrió desde una
 /// sesión suya.
 const VARIABLE_CLAUDECODE: &str = "CLAUDECODE";
-/// Variable con la carpeta de configuración de Claude Code.
-const VARIABLE_CONFIGURACION_CLAUDE: &str = "CLAUDE_CONFIG_DIR";
-/// Variable con la carpeta de configuración de Codex.
-const VARIABLE_CONFIGURACION_CODEX: &str = "CODEX_HOME";
 /// Opción con la que Programator recibe la carpeta del proyecto.
 const OPCION_RUTA_PROGRAMATOR: &str = "--ruta";
 /// Opción de agy que abre la sesión interactiva con un primer mensaje: «-i Short alias for
@@ -63,8 +59,8 @@ const OPCION_MENSAJE_AGY: &str = "-i";
 /// escritura en el proyecto, con red, y sin pedir nunca aprobación. Valores de
 /// https://learn.chatgpt.com/docs/agent-approvals-security («--ask-for-approval never» y
 /// `sandbox_workspace_write.network_access`, que workspace-write deja apagada si no se activa).
-/// La red hace falta para las VM de pruebas. Orden del Director del 2026-11-22: los agentes
-/// trabajan de forma autónoma, sin pedir permiso para cada tarea.
+/// La red hace falta para que el agente pueda usar máquinas de pruebas o descargar dependencias.
+/// Los agentes trabajan de forma autónoma, sin pedir permiso para cada tarea.
 const PERMISOS_DE_CODEX: [&str; 6] = [
     "-s",
     "workspace-write",
@@ -216,12 +212,14 @@ fn sin_ejecutable(peticion: &PeticionDeLanzamiento, sistema: Sistema) -> ErrorDe
 struct OrdenDeTerminal<'a> {
     titulo: String,
     variables: Vec<Asignacion<'a>>,
+    /// Variables que la terminal quita antes de asignar las demás.
+    quitadas: Vec<&'static str>,
     carpeta: &'a Path,
     programa: &'a Path,
     argumentos: Vec<&'a str>,
     carpetas_a_crear: Vec<PathBuf>,
-    /// Si la terminal lanza antes el vigilante persistente de Codex (solo en el plan de Codex).
-    vigilante_de_codex: bool,
+    /// Lo que la terminal lanza antes: el vigilante persistente de Codex, solo en su plan.
+    previo: PrevioDeTerminal,
 }
 
 /// Plan que abre una orden en una terminal: PowerShell en Windows y el primer emulador
@@ -238,10 +236,11 @@ fn plan_en_terminal(
             let guion = terminal::guion_powershell(
                 &orden.titulo,
                 &orden.variables,
+                &orden.quitadas,
                 carpeta,
                 programa,
                 &orden.argumentos,
-                orden.vigilante_de_codex,
+                orden.previo,
             );
             (
                 PathBuf::from(terminal::POWERSHELL),
@@ -251,10 +250,11 @@ fn plan_en_terminal(
         Sistema::Linux => {
             let guion = terminal::guion_bash(
                 &orden.variables,
+                &orden.quitadas,
                 carpeta,
                 programa,
                 &orden.argumentos,
-                orden.vigilante_de_codex,
+                orden.previo,
             );
             let emulador = TERMINALES_LINUX
                 .iter()
@@ -313,11 +313,7 @@ fn plan_de_claude(
     entorno: &dyn EntornoDelSistema,
 ) -> Result<PlanDeLanzamiento, ErrorDeLanzamiento> {
     let ejecutable = ejecutable_de(peticion, sistema, entorno)?;
-    let configuracion = peticion
-        .directorio_configuracion
-        .as_deref()
-        .map(como_texto)
-        .transpose()?;
+    let cuenta = cambio_de_cuenta(peticion)?;
     let mut variables = vec![
         asignacion_de_identidad(peticion),
         asignacion_de_proyecto(peticion)?,
@@ -326,25 +322,56 @@ fn plan_de_claude(
             valor: "",
         },
     ];
-    if let Some(carpeta) = configuracion {
-        variables.push(Asignacion {
-            nombre: VARIABLE_CONFIGURACION_CLAUDE,
-            valor: carpeta,
-        });
-    }
+    variables.extend(cuenta.poner);
     plan_en_terminal(
         OrdenDeTerminal {
             titulo: titulo(peticion),
             variables,
+            quitadas: cuenta.quitar.into_iter().collect(),
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
             argumentos: mensaje_inicial(peticion).into_iter().collect(),
-            carpetas_a_crear: peticion.directorio_configuracion.iter().cloned().collect(),
-            vigilante_de_codex: false,
+            carpetas_a_crear: cuenta.carpeta_a_crear.into_iter().collect(),
+            previo: PrevioDeTerminal::Ninguno,
         },
         sistema,
         entorno,
     )
+}
+
+/// Lo que el ajuste de entorno de la cuenta cambia en la terminal: la variable que pone (con la
+/// carpeta de la cuenta, que se crea si falta) o la que quita.
+#[derive(Default)]
+struct CambioDeCuenta<'a> {
+    poner: Option<Asignacion<'a>>,
+    quitar: Option<&'static str>,
+    carpeta_a_crear: Option<PathBuf>,
+}
+
+/// Traduce el ajuste de entorno de la petición (ver [`PeticionDeLanzamiento::ajuste_de_entorno`])
+/// a la terminal. Devuelve el error si la carpeta no es Unicode válido.
+///
+/// Desviación de la norma de integración de deteccion-agentes (N8): el ajuste no se aplica con `AjusteDeEntorno::aplicar_a` sobre un `Command`,
+/// porque el agente no es hijo de Gestor sino de la terminal que este abre. Se escribe en el
+/// guion de esa terminal, que quita la variable (`Remove-Item Env:` o `unset`) o la pone.
+fn cambio_de_cuenta(
+    peticion: &PeticionDeLanzamiento,
+) -> Result<CambioDeCuenta<'_>, ErrorDeLanzamiento> {
+    Ok(match &peticion.ajuste_de_entorno {
+        None => CambioDeCuenta::default(),
+        Some(AjusteDeEntorno::Poner { variable, valor }) => CambioDeCuenta {
+            poner: Some(Asignacion {
+                nombre: variable,
+                valor: como_texto(valor)?,
+            }),
+            quitar: None,
+            carpeta_a_crear: Some(valor.clone()),
+        },
+        Some(AjusteDeEntorno::Quitar { variable }) => CambioDeCuenta {
+            quitar: Some(variable),
+            ..CambioDeCuenta::default()
+        },
+    })
 }
 
 /// Una ruta como texto para el guion de la terminal, o el error si no es Unicode válido.
@@ -356,8 +383,8 @@ fn como_texto(ruta: &Path) -> Result<&str, ErrorDeLanzamiento> {
 }
 
 /// Codex CLI en una terminal, en la carpeta del proyecto, con GESTOR_AGENTE y GESTOR_PROYECTO en
-/// la terminal y en las órdenes de la sesión ([`variables_de_ordenes_codex`]), CODEX_HOME si el
-/// perfil la trae y los argumentos del perfil.
+/// la terminal y en las órdenes de la sesión ([`variables_de_ordenes_codex`]), el ajuste de
+/// CODEX_HOME de la cuenta ([`cambio_de_cuenta`]) y los argumentos del perfil.
 fn plan_de_codex(
     peticion: &PeticionDeLanzamiento,
     sistema: Sistema,
@@ -365,25 +392,17 @@ fn plan_de_codex(
 ) -> Result<PlanDeLanzamiento, ErrorDeLanzamiento> {
     let ejecutable = ejecutable_de(peticion, sistema, entorno)?;
     let variables_de_ordenes = variables_de_ordenes_codex(peticion)?;
-    let configuracion = peticion
-        .directorio_configuracion
-        .as_deref()
-        .map(como_texto)
-        .transpose()?;
+    let cuenta = cambio_de_cuenta(peticion)?;
     let mut variables = vec![
         asignacion_de_identidad(peticion),
         asignacion_de_proyecto(peticion)?,
     ];
-    if let Some(carpeta) = configuracion {
-        variables.push(Asignacion {
-            nombre: VARIABLE_CONFIGURACION_CODEX,
-            valor: carpeta,
-        });
-    }
+    variables.extend(cuenta.poner);
     plan_en_terminal(
         OrdenDeTerminal {
             titulo: titulo(peticion),
             variables,
+            quitadas: cuenta.quitar.into_iter().collect(),
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
             argumentos: variables_de_ordenes
@@ -393,8 +412,8 @@ fn plan_de_codex(
                 .chain(permisos_de_codex(peticion, sistema))
                 .chain(mensaje_inicial(peticion))
                 .collect(),
-            carpetas_a_crear: peticion.directorio_configuracion.iter().cloned().collect(),
-            vigilante_de_codex: true,
+            carpetas_a_crear: cuenta.carpeta_a_crear.into_iter().collect(),
+            previo: PrevioDeTerminal::VigilanteDeCodex,
         },
         sistema,
         entorno,
@@ -496,6 +515,7 @@ fn plan_de_gemini(
                 asignacion_de_identidad(peticion),
                 asignacion_de_proyecto(peticion)?,
             ],
+            quitadas: Vec::new(),
             carpeta: &peticion.carpeta_proyecto,
             programa: &ejecutable,
             argumentos: proyecto
@@ -509,7 +529,7 @@ fn plan_de_gemini(
                 )
                 .collect(),
             carpetas_a_crear: Vec::new(),
-            vigilante_de_codex: false,
+            previo: PrevioDeTerminal::Ninguno,
         },
         sistema,
         entorno,
@@ -597,6 +617,7 @@ fn plan_de_programator(
             OrdenDeTerminal {
                 titulo: titulo(peticion),
                 variables: vec![asignacion_de_identidad(peticion)],
+                quitadas: Vec::new(),
                 carpeta: &carpeta,
                 programa: &ejecutable,
                 argumentos: vec![
@@ -604,7 +625,7 @@ fn plan_de_programator(
                     como_texto(&peticion.carpeta_proyecto)?,
                 ],
                 carpetas_a_crear: Vec::new(),
-                vigilante_de_codex: false,
+                previo: PrevioDeTerminal::Ninguno,
             },
             sistema,
             entorno,

@@ -8,13 +8,19 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
+use canal::contrato;
+use canal::contrato::opciones_del_vigilante as op;
 use canal::identidad::Identidad;
 
+use crate::avisos::{self, AvisosPendientes, Lote};
 use crate::entrega;
 use crate::hilo;
 use crate::opciones::{Modo, Opciones, ProcesoMarcado, TipoDeEntrega, VIDA_HASTA_CAMBIO_SEGUNDOS};
 use crate::pasada::{self, Resultado, Visto};
 use crate::procesos::{self, Procesos};
+use crate::puertos::{
+    EntregaConCodex, Entregador, Espera, EsperaDelSistema, Reloj, RelojDelSistema,
+};
 use crate::recuerdo;
 use crate::vivo;
 
@@ -37,6 +43,10 @@ const NOMBRES_DE_CODEX: [&str; 2] = ["codex", "codex.exe"];
 /// Código de salida cuando las opciones o el entorno no permiten vigilar.
 pub const CODIGO_DE_USO: i32 = 2;
 
+/// Lo que anota en avisos.log un vigilante --hasta-cambio al terminar con un aviso: la herramienta
+/// despierta al agente cuando termina la tarea.
+const ANOTACION_DE_HASTA_CAMBIO: &str = "fin de la tarea";
+
 /// Lo que necesita cada modo: dónde está el canal y por quién se vigila.
 pub struct Contexto {
     /// Carpeta .gestor/ del proyecto.
@@ -53,7 +63,7 @@ impl Contexto {
 
     /// Carpeta .gestor/canal/.
     fn canal(&self) -> PathBuf {
-        self.gestor.join("canal")
+        self.gestor.join(contrato::CARPETA_CANAL)
     }
 
     /// Carpeta del recuerdo del agente.
@@ -68,9 +78,14 @@ impl Contexto {
             .map_or_else(|| self.gestor.clone(), Path::to_path_buf)
     }
 
+    /// Nombre de la bandeja del agente, como «claude2.md».
+    fn bandeja(&self) -> String {
+        format!("{}{}", self.nombre(), contrato::EXTENSION_DEL_CANAL)
+    }
+
     /// Texto de la bandeja del agente, o vacío si no se puede leer en este momento.
     fn leer_propia(&self) -> String {
-        fs::read(self.canal().join(format!("{}.md", self.nombre())))
+        fs::read(self.canal().join(self.bandeja()))
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .unwrap_or_default()
     }
@@ -78,7 +93,7 @@ impl Contexto {
     /// Archivos vigilados del canal con su texto. Uno que no se puede leer en este momento (otro
     /// agente lo está escribiendo) se salta y se ve en la pasada siguiente.
     fn leer_canal(&self) -> io::Result<Vec<(String, String)>> {
-        let propia = format!("{}.md", self.nombre());
+        let propia = self.bandeja();
         let mut archivos = Vec::new();
         for entrada in fs::read_dir(self.canal())? {
             let entrada = entrada?;
@@ -172,35 +187,6 @@ fn avisar(contexto: &Contexto, resultado: &Resultado, salida: &mut dyn Write) {
     }
 }
 
-/// Etiquetas y archivos de los cambios etiquetados, para el registro y la entrega.
-fn resumen(resultado: &Resultado) -> (String, Vec<String>) {
-    let mut etiquetas = Vec::new();
-    if resultado
-        .cambios
-        .iter()
-        .any(|c| c.encargo && !c.respuesta_de_programator())
-    {
-        etiquetas.push("encargo");
-    }
-    if resultado
-        .cambios
-        .iter()
-        .any(pasada::Cambio::respuesta_de_programator)
-    {
-        etiquetas.push("respuesta");
-    }
-    if resultado.cambios.iter().any(|c| c.mutacion) {
-        etiquetas.push("mutacion");
-    }
-    let archivos = resultado
-        .cambios
-        .iter()
-        .filter(|c| c.etiquetado())
-        .map(|c| c.archivo.clone())
-        .collect();
-    (etiquetas.join(","), archivos)
-}
-
 /// Por qué termina un vigilante que espera.
 enum Fin {
     /// Otro vigilante del mismo agente lo ha relevado.
@@ -262,6 +248,46 @@ impl Guardia {
     }
 }
 
+/// Rastro de un vigilante que espera: su relevo y su vivo.json. Al soltarse, también si sale
+/// por un error, deja el relevo si sigue siendo suyo y borra su vivo.json.
+struct Rastro {
+    guardia: Guardia,
+    vivo: Option<String>,
+    recuerdo: PathBuf,
+}
+
+impl Rastro {
+    /// Toma el relevo y escribe vivo.json.
+    fn tomar(
+        contexto: &Contexto,
+        procesos: &mut dyn Procesos,
+        modo: Modo,
+        duenos: Vec<ProcesoMarcado>,
+        vida: Option<u64>,
+    ) -> io::Result<Self> {
+        let guardia = Guardia::tomar(contexto, duenos, vida)?;
+        Ok(Self {
+            guardia,
+            vivo: escribir_vivo(contexto, procesos, modo),
+            recuerdo: contexto.recuerdo(),
+        })
+    }
+
+    /// Si hay que terminar, y por qué.
+    fn fin(&self, procesos: &mut dyn Procesos) -> Option<Fin> {
+        self.guardia.fin(procesos)
+    }
+}
+
+impl Drop for Rastro {
+    fn drop(&mut self) {
+        self.guardia.soltar();
+        if let Some(texto) = &self.vivo {
+            vivo::borrar_vivo(&self.recuerdo, texto);
+        }
+    }
+}
+
 /// Mensaje con que termina un vigilante que espera.
 fn mensaje_de_fin(fin: &Fin, identidad: &Identidad) -> String {
     match fin {
@@ -292,13 +318,12 @@ fn hasta_cambio(
         .map(procesos::DatosDeProceso::marcado)
         .collect();
     let vida = opciones.vida_segundos.or(Some(VIDA_HASTA_CAMBIO_SEGUNDOS));
-    let guardia = Guardia::tomar(contexto, duenos, vida)?;
-    let vivo_texto = escribir_vivo(contexto, procesos, Modo::HastaCambio);
+    let rastro = Rastro::tomar(contexto, procesos, Modo::HastaCambio, duenos, vida)?;
     let espera = Duration::from_secs(opciones.intervalo_segundos);
-    let codigo = loop {
-        if let Some(fin) = guardia.fin(procesos) {
+    loop {
+        if let Some(fin) = rastro.fin(procesos) {
             decir(salida, &mensaje_de_fin(&fin, &contexto.identidad));
-            break 0;
+            return Ok(0);
         }
         let archivos = contexto.leer_canal()?;
         let resultado = pasada::comparar(
@@ -310,23 +335,18 @@ fn hasta_cambio(
         if resultado.hay_etiquetas() {
             avisar(contexto, &resultado, salida);
             recuerdo::guardar(&contexto.recuerdo(), &resultado.visto)?;
-            let (etiquetas, nombres) = resumen(&resultado);
+            let lote = Lote::de_resultado(&resultado);
             let _ = vivo::anotar_aviso(
                 &contexto.recuerdo(),
                 vivo::ahora(),
-                &etiquetas,
-                &nombres,
-                "fin de la tarea",
+                &lote.etiquetas,
+                &lote.archivos,
+                ANOTACION_DE_HASTA_CAMBIO,
             );
-            break 0;
+            return Ok(0);
         }
         thread::sleep(espera);
-    };
-    guardia.soltar();
-    if let Some(texto) = vivo_texto {
-        vivo::borrar_vivo(&contexto.recuerdo(), &texto);
     }
-    Ok(codigo)
 }
 
 /// Escribe vivo.json con el proceso propio; devuelve su texto para borrarlo al terminar.
@@ -400,25 +420,25 @@ fn quedarse_en_segundo_plano(
         }
     };
     let mut argumentos = vec![
-        String::from("--persistente"),
-        String::from("--entrega"),
-        String::from("codex"),
-        String::from("--hijo"),
-        String::from("--agente"),
+        String::from(op::PERSISTENTE),
+        String::from(op::ENTREGA),
+        String::from(op::ENTREGA_CODEX),
+        String::from(op::HIJO),
+        String::from(op::AGENTE),
         contexto.identidad.to_string(),
-        String::from("--gestor"),
+        String::from(op::GESTOR),
         contexto.gestor.to_string_lossy().into_owned(),
-        String::from("--dueno"),
+        String::from(op::DUENO),
         format!("{}:{}", destino.dueno.pid, destino.dueno.arranque),
-        String::from("--codex"),
+        String::from(op::CODEX),
         destino.codex.to_string_lossy().into_owned(),
-        String::from("--hilo"),
+        String::from(op::HILO),
         destino.hilo,
-        String::from("--intervalo-segundos"),
+        String::from(op::INTERVALO_SEGUNDOS),
         opciones.intervalo_segundos.to_string(),
     ];
     if let Some(vida) = opciones.vida_segundos {
-        argumentos.extend([String::from("--vida-segundos"), vida.to_string()]);
+        argumentos.extend([String::from(op::VIDA_SEGUNDOS), vida.to_string()]);
     }
     let propio = std::env::current_exe()?;
     let pid = lanzar_desligado(&propio, &argumentos)?;
@@ -544,8 +564,44 @@ fn persistente(
     ) else {
         return Ok(CODIGO_DE_USO);
     };
-    let guardia = Guardia::tomar(contexto, vec![dueno], opciones.vida_segundos)?;
-    let vivo_texto = escribir_vivo(contexto, procesos, Modo::Persistente);
+    let rastro = Rastro::tomar(
+        contexto,
+        procesos,
+        Modo::Persistente,
+        vec![dueno],
+        opciones.vida_segundos,
+    )?;
+    let entregador = EntregaConCodex {
+        codex,
+        raiz: contexto.raiz(),
+        hilo,
+    };
+    let mundo = Mundo {
+        reloj: &RelojDelSistema,
+        espera: &EsperaDelSistema,
+        entregador: &entregador,
+        intervalo: Duration::from_secs(opciones.intervalo_segundos),
+    };
+    vigilar_y_entregar(contexto, &rastro, procesos, &mundo)?;
+    Ok(0)
+}
+
+/// Lo que el bucle persistente toma del mundo.
+struct Mundo<'a> {
+    reloj: &'a dyn Reloj,
+    espera: &'a dyn Espera,
+    entregador: &'a dyn Entregador,
+    intervalo: Duration,
+}
+
+/// Bucle del modo persistente: compara el canal en cada pasada, junta los avisos y los entrega
+/// cuando toca, hasta que el rastro dice que hay que terminar.
+fn vigilar_y_entregar(
+    contexto: &Contexto,
+    rastro: &Rastro,
+    procesos: &mut dyn Procesos,
+    mundo: &Mundo<'_>,
+) -> io::Result<()> {
     let mut visto: Visto = match recuerdo::leer(&contexto.recuerdo()) {
         Some(visto) => visto,
         None => {
@@ -554,11 +610,8 @@ fn persistente(
             primera
         }
     };
-    let espera = Duration::from_secs(opciones.intervalo_segundos);
-    let mut pendientes: Vec<String> = Vec::new();
-    let mut etiquetas_pendientes = String::new();
-    let mut ultima_entrega: Option<u64> = None;
-    while guardia.fin(procesos).is_none() {
+    let mut pendientes = AvisosPendientes::default();
+    while rastro.fin(procesos).is_none() {
         if let Ok(archivos) = contexto.leer_canal() {
             let resultado = pasada::comparar(
                 &visto,
@@ -570,36 +623,25 @@ fn persistente(
                 recuerdo::guardar(&contexto.recuerdo(), &resultado.visto)?;
                 visto = resultado.visto.clone();
             }
-            if resultado.hay_etiquetas() {
-                let (etiquetas, nombres) = resumen(&resultado);
-                for nombre in nombres {
-                    if !pendientes.contains(&nombre) {
-                        pendientes.push(nombre);
-                    }
-                }
-                etiquetas_pendientes = etiquetas;
-            }
+            pendientes.anadir(&resultado);
         }
-        let ahora = vivo::ahora();
-        if !pendientes.is_empty() && entrega::toca_entregar(ultima_entrega, ahora) {
-            let mensaje = entrega::texto_del_aviso(&contexto.identidad, &pendientes);
-            let resultado = entrega::entregar(&codex, &contexto.raiz(), &hilo, &mensaje);
+        let ahora = mundo.reloj.ahora();
+        if let Some((lote, resultado)) = avisos::entregar_si_toca(
+            &mut pendientes,
+            ahora,
+            &contexto.identidad,
+            mundo.entregador,
+        ) {
             let anotado = entrega::anotacion(&resultado);
             let _ = vivo::anotar_aviso(
                 &contexto.recuerdo(),
                 ahora,
-                &etiquetas_pendientes,
-                &pendientes,
+                &lote.etiquetas,
+                &lote.archivos,
                 &anotado,
             );
-            ultima_entrega = Some(ahora);
-            pendientes.clear();
         }
-        thread::sleep(espera);
+        mundo.espera.esperar(mundo.intervalo);
     }
-    guardia.soltar();
-    if let Some(texto) = vivo_texto {
-        vivo::borrar_vivo(&contexto.recuerdo(), &texto);
-    }
-    Ok(0)
+    Ok(())
 }

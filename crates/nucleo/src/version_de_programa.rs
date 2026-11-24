@@ -1,4 +1,4 @@
-//! Versión de un programa instalado y si hay otra más nueva publicada (F7, 3.7.0).
+//! Versión de un programa instalado y si hay otra más nueva publicada.
 //!
 //! Programator se instala como carpeta portable: una versión nueva suele ir a otra carpeta, y la
 //! ruta del perfil sigue apuntando a la antigua. En Windows, su ejecutable lleva la versión en el
@@ -7,7 +7,7 @@
 //! programator.exe 0.12.0. Los ejecutables de Linux no llevan ese recurso. Lógica pura: los bytes
 //! llegan ya leídos.
 
-use crate::actualizaciones::{Publicacion, Version};
+use crate::actualizaciones::Version;
 
 /// Nombre de la cadena del recurso con la versión del producto.
 const CLAVE_DE_VERSION: &str = "ProductVersion";
@@ -37,16 +37,14 @@ pub fn version_en_recurso(bytes: &[u8]) -> Option<Version> {
         .collect();
     let texto = String::from_utf16(&unidades).ok()?;
     let texto = texto.trim();
-    Version::leer(texto).or_else(|| Version::leer(texto.strip_suffix(".0")?))
+    Version::desde_etiqueta(texto).or_else(|| Version::desde_etiqueta(texto.strip_suffix(".0")?))
 }
 
 /// La versión publicada si es más nueva que la instalada; nada si no se sabe alguna de las dos.
 #[must_use]
-pub fn mas_nueva(instalada: Option<Version>, publicada: Option<&Publicacion>) -> Option<Version> {
+pub fn mas_nueva(instalada: Option<Version>, publicada: Option<Version>) -> Option<Version> {
     let instalada = instalada?;
-    publicada
-        .map(|publicacion| publicacion.version)
-        .filter(|version| *version > instalada)
+    publicada.filter(|version| *version > instalada)
 }
 
 /// Bytes UTF-16LE de un texto ASCII.

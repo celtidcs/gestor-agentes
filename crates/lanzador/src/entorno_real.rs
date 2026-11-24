@@ -30,6 +30,8 @@ impl EntornoDelSistema for EntornoReal {
             })
     }
 
+    // Misma regla que nucleo::cuentas_de_agentes::carpeta_personal (la de deteccion-agentes); se
+    // repite aquí porque el lanzador no depende de nucleo, y las dos se prueban por separado.
     fn carpeta_personal(&self) -> Option<PathBuf> {
         let variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
         std::env::var_os(variable)

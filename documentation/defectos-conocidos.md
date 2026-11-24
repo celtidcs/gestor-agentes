@@ -38,7 +38,7 @@ Con su entorno aislado de Windows, cada orden de PowerShell que ejecuta Codex CL
 
 Codex ejecuta las órdenes en un servicio compartido
 
-Codex CLI 0.167.1 no ejecuta las órdenes de una sesión desde la terminal que la abrió, sino desde un servicio de fondo que comparten todas sus sesiones del equipo, y ese servicio conserva las variables de la sesión que lo arrancó. Por eso la aplicación pasa la identidad y la carpeta del proyecto a cada sesión de Codex como configuración de la propia sesión, que sí llega a sus órdenes. La carpeta de configuración que fija el perfil de Codex, CODEX_HOME, sigue yendo solo como variable de la terminal: no está comprobado qué hace el servicio compartido con dos perfiles que usan carpetas de configuración distintas.
+Codex CLI 0.167.1 no ejecuta las órdenes de una sesión desde la terminal que la abrió, sino desde un servicio de fondo que comparten todas sus sesiones del equipo, y ese servicio conserva las variables de la sesión que lo arrancó. Por eso la aplicación pasa la identidad y la carpeta del proyecto a cada sesión de Codex como configuración de la propia sesión, que sí llega a sus órdenes. La carpeta de cada cuenta de Codex sigue yendo solo como variable de la terminal, CODEX_HOME, que se pone con su carpeta o, en Codex 1, se quita: no está comprobado qué hace el servicio compartido con dos sesiones de cuentas distintas.
 
 
 Codex instalado con npm en Windows
@@ -79,3 +79,8 @@ Gestor Agentes despierta al agente que hizo un encargo a Programator cuando la r
 En Linux no se ve la versión de Programator
 
 La versión del Programator de la ruta se lee del recurso de versión de su ejecutable, que solo llevan los programas de Windows. En Linux la pestaña Agentes no puede decir qué versión tienes ni avisar de que hay otra más nueva; para saberlo, mira la página de versiones de Programator en GitHub.
+
+
+No se puede quitar un agente desde la ventana
+
+La pestaña Agentes no tiene un botón para quitar un agente de la lista. Desde la versión 3.9.0 esto se nota más, porque una copia de una cuenta guardada con un nombre que empieza por .claude o por .codex aparece como un agente nuevo y se queda en la lista. Mientras no exista ese botón, el agente se quita a mano: con la aplicación cerrada, se borra su bloque en perfiles-agentes.json, en la carpeta datos. El manual de uso lo explica paso a paso en el apartado Si guardas copias de cuentas.

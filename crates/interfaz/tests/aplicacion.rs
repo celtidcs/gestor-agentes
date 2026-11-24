@@ -8,16 +8,20 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gestor_agentes::aplicacion::{Aplicacion, Dialogo, Servicios};
+use gestor_agentes::aplicacion::{Aplicacion, Dialogo, RespuestaDeDialogo};
 use gestor_agentes::perfiles::{CarpetaDelAgente, Disponibilidad, EstadoDelAgente};
-use gestor_agentes::trabajos::{self, Lanzamiento, Motor, ResultadoDeTrabajo, Trabajador, Trabajo};
-use lanzador::{ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento, PlanDeLanzamiento};
+use gestor_agentes::trabajos::{self, Lanzamiento, ResultadoDeTrabajo, Trabajador, Trabajo};
+use lanzador::{
+    AjusteDeEntorno, ErrorDeLanzamiento, Herramienta, PeticionDeLanzamiento, PlanDeLanzamiento,
+};
 use nucleo::actualizaciones::Version;
 use nucleo::agentes::IdentidadAgente;
 use nucleo::configuracion::{
     ErrorDeConfiguracion, HerramientaDelPerfil, PerfilDeAgente, ProyectoRegistrado,
 };
-use nucleo::cuentas::CarpetaPersonal;
+use nucleo::cuentas::{Cuenta, OrigenDeLaCuenta};
+use nucleo::cuentas_de_agentes::CuentaManual;
+use nucleo::migracion_de_claude::{ErrorDeMigracion, MigracionHecha, RutasDeLaMigracion};
 use nucleo::proyecto::estado::EstadoDelProyecto;
 use nucleo::proyecto::informe::{InformeDeInicializacion, TipoDeCambio};
 use nucleo::proyecto::papeles::Papel;
@@ -39,7 +43,7 @@ struct Disco {
 
 struct ServiciosDeMentira(Rc<RefCell<Disco>>);
 
-impl Servicios for ServiciosDeMentira {
+impl gestor_agentes::aplicacion::AlmacenDeConfiguracion for ServiciosDeMentira {
     fn guardar_proyectos(
         &self,
         proyectos: &[ProyectoRegistrado],
@@ -54,33 +58,6 @@ impl Servicios for ServiciosDeMentira {
         disco.guardados.push(proyectos.to_vec());
         Ok(())
     }
-
-    fn estado_del_proyecto(&self, carpeta: &Path) -> EstadoDelProyecto {
-        if carpeta.ends_with("configurado") {
-            EstadoDelProyecto::Configurado
-        } else {
-            EstadoDelProyecto::SinConfigurar
-        }
-    }
-
-    fn existe_carpeta(&self, carpeta: &Path) -> bool {
-        carpeta
-            .to_str()
-            .is_some_and(|ruta| self.0.borrow().carpetas.contains(ruta))
-    }
-
-    fn ahora(&self) -> String {
-        AHORA.to_owned()
-    }
-
-    fn mostrar_fecha(&self, iso: &str) -> String {
-        format!("visible:{iso}")
-    }
-
-    fn ruta_perfiles(&self) -> PathBuf {
-        PathBuf::from(RUTA_PERFILES)
-    }
-
     fn guardar_perfiles(&self, perfiles: &[PerfilDeAgente]) -> Result<(), ErrorDeConfiguracion> {
         let mut disco = self.0.borrow_mut();
         if disco.guardar_perfiles_falla {
@@ -92,14 +69,42 @@ impl Servicios for ServiciosDeMentira {
         disco.perfiles_guardados.push(perfiles.to_vec());
         Ok(())
     }
+    fn ruta_perfiles(&self) -> PathBuf {
+        PathBuf::from(RUTA_PERFILES)
+    }
+}
 
+impl gestor_agentes::aplicacion::RelojDeInterfaz for ServiciosDeMentira {
+    fn ahora(&self) -> String {
+        AHORA.to_owned()
+    }
+    fn mostrar_fecha(&self, iso: &str) -> String {
+        format!("visible:{iso}")
+    }
+}
+
+impl gestor_agentes::aplicacion::DiscoDeInterfaz for ServiciosDeMentira {
+    fn existe_carpeta(&self, carpeta: &Path) -> bool {
+        carpeta
+            .to_str()
+            .is_some_and(|ruta| self.0.borrow().carpetas.contains(ruta))
+    }
     fn existe_archivo(&self, ruta: &Path) -> bool {
         ruta.to_str()
             .is_some_and(|ruta| self.0.borrow().archivos.contains(ruta))
     }
-
     fn carpeta_personal(&self) -> Option<PathBuf> {
         Some(PathBuf::from(CASA))
+    }
+}
+
+impl gestor_agentes::aplicacion::InspectorDeProyecto for ServiciosDeMentira {
+    fn estado_del_proyecto(&self, carpeta: &Path) -> EstadoDelProyecto {
+        if carpeta.ends_with("configurado") {
+            EstadoDelProyecto::Configurado
+        } else {
+            EstadoDelProyecto::SinConfigurar
+        }
     }
 }
 
@@ -143,6 +148,7 @@ fn detectado(aplicacion: &mut Aplicacion, disponibilidad: Vec<Disponibilidad>) {
         disponibilidad,
         carpetas: Vec::new(),
         anadidos: 0,
+        normalizados: 0,
     });
 }
 
@@ -218,6 +224,31 @@ fn unos_perfiles_danados_dejan_la_lista_y_lo_dicen() {
     assert!(aplicacion
         .texto_de_estado()
         .starts_with("Configuración no válida"));
+}
+
+/// Si perfiles-agentes.json no se pudo leer, la búsqueda de agentes no lo
+/// sobrescribe con las cuentas que encuentre, porque borraría la lista del usuario.
+#[test]
+fn unos_perfiles_danados_no_se_sobrescriben_al_buscar_agentes() {
+    let disco = Rc::new(RefCell::new(Disco::default()));
+    let mut aplicacion = Aplicacion::new(
+        Box::new(ServiciosDeMentira(Rc::clone(&disco))),
+        Ok(vec![proyecto("uno", "/p/uno")]),
+        Err(error_de_formato()),
+    );
+    let _ = aplicacion.detectar();
+    aplicacion.terminar(ResultadoDeTrabajo::Detectado {
+        perfiles: perfiles(),
+        disponibilidad: vec![disponible("/bin/claude"); 3],
+        carpetas: Vec::new(),
+        anadidos: 3,
+        normalizados: 0,
+    });
+    assert!(disco.borrow().perfiles_guardados.is_empty());
+    assert_eq!(
+        aplicacion.texto_de_estado(),
+        gestor_agentes::textos::PERFILES_ILEGIBLES_SIN_GUARDAR
+    );
 }
 
 // Botones
@@ -569,12 +600,15 @@ fn borrar_pide_confirmacion_y_solo_el_si_encarga_el_borrado() {
         .unwrap_or_else(|| unreachable!());
     assert!(dialogo.pide_confirmacion());
     assert!(dialogo.texto().contains("Proyecto: uno\nRuta: /p/uno"));
-    assert_eq!(aplicacion.cerrar_dialogo(false), None);
+    assert_eq!(
+        aplicacion.cerrar_dialogo(RespuestaDeDialogo::Cancelar),
+        None
+    );
     assert!(!aplicacion.ocupada());
 
     aplicacion.pedir_borrado();
     assert_eq!(
-        aplicacion.cerrar_dialogo(true),
+        aplicacion.cerrar_dialogo(RespuestaDeDialogo::Aceptar),
         Some(Trabajo::Borrar {
             nombre: String::from("uno"),
             ruta: String::from("/p/uno"),
@@ -588,7 +622,7 @@ fn borrado_correcto_quita_el_proyecto_y_guarda() {
     let (mut aplicacion, disco) = montar(vec![proyecto("uno", "/p/uno")]);
     aplicacion.seleccionar("/p/uno");
     aplicacion.pedir_borrado();
-    let _ = aplicacion.cerrar_dialogo(true);
+    let _ = aplicacion.cerrar_dialogo(RespuestaDeDialogo::Aceptar);
     aplicacion.terminar(ResultadoDeTrabajo::Borrado {
         nombre: String::from("uno"),
         ruta: String::from("/p/uno"),
@@ -608,7 +642,7 @@ fn borrado_fallido_conserva_el_proyecto_y_lo_dice() {
     let (mut aplicacion, disco) = montar(vec![proyecto("uno", "/p/uno")]);
     aplicacion.seleccionar("/p/uno");
     aplicacion.pedir_borrado();
-    let _ = aplicacion.cerrar_dialogo(true);
+    let _ = aplicacion.cerrar_dialogo(RespuestaDeDialogo::Aceptar);
     aplicacion.terminar(ResultadoDeTrabajo::Borrado {
         nombre: String::from("uno"),
         ruta: String::from("/p/uno"),
@@ -663,8 +697,10 @@ struct MotorDeMentira {
     version_de_programator: Option<Version>,
     /// Herramientas cuyo programa se encuentra solo, en «/bin/<herramienta>».
     instaladas: Vec<Herramienta>,
-    /// Carpetas de cuenta que hay en la carpeta personal.
-    cuentas: Vec<CarpetaPersonal>,
+    /// Cuentas que «encuentra» la biblioteca, antes de añadir las manuales.
+    cuentas: Vec<Cuenta>,
+    /// Lo que devuelve la migración del estado de Claude 1: nada, lo hecho o un error.
+    migracion: Option<Result<bool, String>>,
     /// Carpetas que existen.
     carpetas: BTreeSet<PathBuf>,
     /// Sin carpeta personal conocida.
@@ -693,53 +729,44 @@ fn plan() -> PlanDeLanzamiento {
     }
 }
 
-impl Motor for MotorDeMentira {
+impl gestor_agentes::trabajos::SelectoresDeArchivo for MotorDeMentira {
     fn elegir_carpeta(&self) -> Option<PathBuf> {
         self.anotar(String::from("elegir"));
         Some(PathBuf::from("/p/nueva"))
     }
+    fn elegir_ejecutable(&self) -> Option<PathBuf> {
+        self.anotar(String::from("elegir ejecutable"));
+        Some(PathBuf::from("/opt/nuevo"))
+    }
+    fn elegir_carpeta_de_cuenta(&self) -> Option<PathBuf> {
+        self.anotar(String::from("elegir cuenta"));
+        Some(PathBuf::from("/cuentas/claude-trabajo"))
+    }
+}
 
+impl gestor_agentes::trabajos::PreparadorDeProyecto for MotorDeMentira {
     fn preparar(&self, raiz: &Path, identidad: Option<IdentidadAgente>) -> InformeDeInicializacion {
         let quien = identidad.map_or_else(|| String::from("ninguna"), |i| i.nombre());
         self.anotar(format!("preparar {} {quien}", raiz.display()));
         InformeDeInicializacion::new()
     }
-
     fn anotar_papel(&self, raiz: &Path, identidad: &str, papel: Papel) -> std::io::Result<bool> {
         self.anotar(format!("papel {} {identidad} {papel:?}", raiz.display()));
         Ok(true)
     }
+}
 
-    fn elegir_ejecutable(&self) -> Option<PathBuf> {
-        self.anotar(String::from("elegir ejecutable"));
-        Some(PathBuf::from("/opt/nuevo"))
-    }
-
-    fn elegir_carpeta_de_cuenta(&self) -> Option<PathBuf> {
-        self.anotar(String::from("elegir cuenta"));
-        Some(PathBuf::from("/cuentas/claude-trabajo"))
-    }
-
-    fn version_del_ejecutable(&self, ruta: &Path) -> Option<Version> {
-        self.anotar(format!("version {}", ruta.display()));
-        self.version_de_programator
-    }
-
-    fn carpeta_personal(&self) -> Option<PathBuf> {
-        (!self.sin_carpeta_personal).then(|| PathBuf::from(CASA))
-    }
-
+impl gestor_agentes::trabajos::LanzadorDeAgentes for MotorDeMentira {
     fn planificar(
         &self,
         peticion: &PeticionDeLanzamiento,
     ) -> Result<PlanDeLanzamiento, ErrorDeLanzamiento> {
         self.anotar(format!(
             "planificar {} {:?}",
-            peticion.identidad, peticion.directorio_configuracion
+            peticion.identidad, peticion.ajuste_de_entorno
         ));
         Ok(plan())
     }
-
     fn detectar_ejecutable(
         &self,
         herramienta: Herramienta,
@@ -754,16 +781,10 @@ impl Motor for MotorDeMentira {
                 .then(|| PathBuf::from(format!("/bin/{herramienta:?}"))),
         }
     }
-
-    fn explorar_cuentas(&self, carpeta_personal: &Path) -> Vec<CarpetaPersonal> {
-        self.anotar(format!("explorar {}", carpeta_personal.display()));
-        self.cuentas.clone()
+    fn version_del_ejecutable(&self, ruta: &Path) -> Option<Version> {
+        self.anotar(format!("version {}", ruta.display()));
+        self.version_de_programator
     }
-
-    fn existe_carpeta(&self, ruta: &Path) -> bool {
-        self.carpetas.contains(ruta)
-    }
-
     fn ejecutar(&self, plan: &PlanDeLanzamiento) -> Result<(), ErrorDeLanzamiento> {
         self.anotar(format!("ejecutar {}", plan.programa.display()));
         if self.falla_ejecutar {
@@ -774,15 +795,51 @@ impl Motor for MotorDeMentira {
         }
         Ok(())
     }
+}
 
+impl gestor_agentes::trabajos::DiscoDelMotor for MotorDeMentira {
+    fn carpeta_personal(&self) -> Option<PathBuf> {
+        (!self.sin_carpeta_personal).then(|| PathBuf::from(CASA))
+    }
+    fn existe_carpeta(&self, ruta: &Path) -> bool {
+        self.carpetas.contains(ruta)
+    }
     fn borrar_carpeta(&self, ruta: &Path) -> std::io::Result<()> {
         self.anotar(format!("borrar {}", ruta.display()));
         Err(std::io::Error::other("en uso"))
     }
-
     fn tamano(&self, ruta: &Path) -> Option<u64> {
         self.anotar(format!("medir {}", ruta.display()));
         self.tamano
+    }
+    fn cuentas_del_equipo(
+        &self,
+        carpeta_personal: &Path,
+        manuales: &[CuentaManual],
+    ) -> Vec<Cuenta> {
+        self.anotar(format!("cuentas {}", carpeta_personal.display()));
+        let mut cuentas = self.cuentas.clone();
+        cuentas.extend(manuales.iter().map(|manual| Cuenta {
+            herramienta: manual.herramienta,
+            carpeta: manual.carpeta.clone(),
+            origen: OrigenDeLaCuenta::Manual,
+        }));
+        cuentas
+    }
+    fn migrar_estado_de_claude(
+        &self,
+        carpeta_personal: &Path,
+    ) -> Result<Option<MigracionHecha>, ErrorDeMigracion> {
+        self.anotar(format!("migrar {}", carpeta_personal.display()));
+        let rutas = RutasDeLaMigracion::new(carpeta_personal, Path::new("/datos"));
+        match self.migracion.clone() {
+            None => Ok(None),
+            Some(Ok(con_copia)) => Ok(Some(MigracionHecha { rutas, con_copia })),
+            Some(Err(error)) => Err(ErrorDeMigracion {
+                ruta: rutas.destino,
+                origen: std::io::Error::other(error),
+            }),
+        }
     }
 }
 
@@ -856,7 +913,10 @@ fn abrir_prepara_antes_de_lanzar_y_con_la_carpeta_personal() {
             ..
         }
     ));
-    let esperado_config = Some(Path::new("/home/u").join(".claude2"));
+    let esperado_config = Some(AjusteDeEntorno::Poner {
+        variable: "CLAUDE_CONFIG_DIR",
+        valor: Path::new("/home/u").join(".claude2"),
+    });
     assert_eq!(
         motor.anotado(),
         [
@@ -865,6 +925,104 @@ fn abrir_prepara_antes_de_lanzar_y_con_la_carpeta_personal() {
             String::from("ejecutar /bin/claude"),
         ]
     );
+}
+
+/// La cuenta por defecto de Claude se abre quitando CLAUDE_CONFIG_DIR, y antes de
+/// planificarla se hace la migración única de su estado. Se anota como archivo sustituido, con la
+/// identidad del agente, y abre la ventana del informe, para que el usuario lo vea.
+#[test]
+fn abrir_la_cuenta_por_defecto_de_claude_migra_antes_de_planificar_y_lo_avisa() {
+    let motor = MotorDeMentira {
+        migracion: Some(Ok(true)),
+        ..MotorDeMentira::default()
+    };
+    let claude = PerfilDeAgente::new(HerramientaDelPerfil::Claude, 1);
+    let ResultadoDeTrabajo::Abierto {
+        informe,
+        lanzamiento: Lanzamiento::Abierto,
+        ..
+    } = trabajos::ejecutar(trabajo_abrir(claude), &motor)
+    else {
+        unreachable!("se esperaba Abierto");
+    };
+    let quitar = Some(AjusteDeEntorno::Quitar {
+        variable: "CLAUDE_CONFIG_DIR",
+    });
+    assert_eq!(
+        motor.anotado(),
+        [
+            String::from("preparar /p/uno Claude 1"),
+            format!("migrar {CASA}"),
+            format!("planificar Claude 1 {quitar:?}"),
+            String::from("ejecutar /bin/claude"),
+        ]
+    );
+    let rutas = RutasDeLaMigracion::new(Path::new(CASA), Path::new("/datos"));
+    assert!(informe.requiere_ventana());
+    let Some(cambio) = informe
+        .cambios()
+        .iter()
+        .find(|cambio| cambio.tipo == TipoDeCambio::Sustituido)
+    else {
+        unreachable!("la migración se anota como archivo sustituido");
+    };
+    assert_eq!(cambio.archivo, rutas.destino.display().to_string());
+    let detalle = cambio.detalle.as_deref().unwrap_or_default();
+    for parte in [
+        String::from("Claude 1"),
+        rutas.origen.display().to_string(),
+        rutas.copia.display().to_string(),
+        rutas.migrado.display().to_string(),
+    ] {
+        assert!(detalle.contains(&parte), "{detalle}");
+    }
+}
+
+/// Un fallo de la migración se anota como error y Claude 1 se abre igual.
+#[test]
+fn un_fallo_de_la_migracion_se_anota_y_claude_se_abre_igual() {
+    let motor = MotorDeMentira {
+        migracion: Some(Err(String::from("disco lleno"))),
+        ..MotorDeMentira::default()
+    };
+    let ResultadoDeTrabajo::Abierto {
+        informe,
+        lanzamiento: Lanzamiento::Abierto,
+        ..
+    } = trabajos::ejecutar(
+        trabajo_abrir(PerfilDeAgente::new(HerramientaDelPerfil::Claude, 1)),
+        &motor,
+    )
+    else {
+        unreachable!("se esperaba Abierto");
+    };
+    assert!(informe
+        .errores()
+        .iter()
+        .any(|e| e.contains("disco lleno") && e.contains("Claude 1")));
+    assert!(informe.requiere_ventana());
+    assert!(motor.anotado().iter().any(|l| l.starts_with("ejecutar")));
+}
+
+/// Ni Codex ni una cuenta de Claude que no es la por defecto migran nada.
+#[test]
+fn solo_la_cuenta_por_defecto_de_claude_migra() {
+    for perfil in [
+        PerfilDeAgente::new(HerramientaDelPerfil::Codex, 1),
+        PerfilDeAgente::new(HerramientaDelPerfil::Claude, 2).con_directorio("~/.claude2"),
+        PerfilDeAgente::new(HerramientaDelPerfil::Gemini, 1),
+    ] {
+        let motor = MotorDeMentira {
+            migracion: Some(Ok(true)),
+            ..MotorDeMentira::default()
+        };
+        let _ = trabajos::ejecutar(trabajo_abrir(perfil), &motor);
+        assert!(
+            motor.anotado().iter().all(|l| !l.starts_with("migrar")),
+            "{:?}",
+            motor.anotado()
+        );
+    }
 }
 
 #[test]
@@ -1087,6 +1245,23 @@ fn solo_se_ven_y_se_abren_los_agentes_disponibles() {
     assert!(aplicacion.abrir_con(0).is_some());
 }
 
+/// Quitar la carpeta por defecto a un perfil se guarda, pero no se
+/// anuncia como una cuenta nueva.
+#[test]
+fn un_perfil_normalizado_se_guarda_sin_anunciar_cuentas_nuevas() {
+    let (mut aplicacion, disco) = montar_sin_detectar(vec![]);
+    let antes = aplicacion.texto_de_estado().to_owned();
+    aplicacion.terminar(ResultadoDeTrabajo::Detectado {
+        perfiles: perfiles(),
+        disponibilidad: vec![disponible("/bin/claude"); 3],
+        carpetas: Vec::new(),
+        anadidos: 0,
+        normalizados: 1,
+    });
+    assert_eq!(disco.borrow().perfiles_guardados, [perfiles()]);
+    assert_eq!(aplicacion.texto_de_estado(), antes);
+}
+
 #[test]
 fn las_cuentas_nuevas_se_guardan_y_se_dice_cuantas() {
     let (mut aplicacion, disco) = montar_sin_detectar(vec![]);
@@ -1097,6 +1272,7 @@ fn las_cuentas_nuevas_se_guardan_y_se_dice_cuantas() {
         disponibilidad: vec![disponible("/bin/claude"); 4],
         carpetas: Vec::new(),
         anadidos: 1,
+        normalizados: 0,
     });
     assert_eq!(disco.borrow().perfiles_guardados, [con_cuenta]);
     assert_eq!(aplicacion.perfiles().len(), 4);
@@ -1123,6 +1299,7 @@ fn si_no_se_pueden_guardar_las_cuentas_se_usan_igual_y_se_dice() {
         disponibilidad: vec![disponible("/bin/x"); 4],
         carpetas: Vec::new(),
         anadidos: 1,
+        normalizados: 0,
     });
     assert_eq!(aplicacion.perfiles().len(), 4);
     assert!(aplicacion
@@ -1208,6 +1385,7 @@ fn vaciar_una_ruta_guardada_vuelve_a_la_busqueda_automatica() {
         disponibilidad: vec![disponible("/opt/claude"); 3],
         carpetas: Vec::new(),
         anadidos: 0,
+        normalizados: 0,
     });
     assert_eq!(aplicacion.ruta_editada(0), "/opt/claude");
     aplicacion.busqueda_automatica(0);
@@ -1241,16 +1419,19 @@ fn el_ejecutable_elegido_rellena_la_ruta_sin_guardarla() {
 fn la_deteccion_anade_las_cuentas_y_calcula_la_disponibilidad() {
     let motor = MotorDeMentira {
         instaladas: vec![Herramienta::Claude],
-        // Claude 1 y Claude 2 sin carpeta fijada viven en ~/.claude, que existe (AG1).
+        // Claude 2 sin carpeta fijada es la cuenta por defecto, ~/.claude, que existe (AG1). Desde
+        // la 3.9.0 la cuenta por defecto no añade un Claude 1: ya tiene perfil.
         carpetas: BTreeSet::from([Path::new(CASA).join(".claude")]),
         cuentas: vec![
-            CarpetaPersonal {
-                nombre: String::from(".claude"),
-                archivos: vec![String::from(".credentials.json")],
+            Cuenta {
+                herramienta: nucleo::cuentas::Herramienta::ClaudeCode,
+                carpeta: Path::new(CASA).join(".claude"),
+                origen: OrigenDeLaCuenta::PorDefecto,
             },
-            CarpetaPersonal {
-                nombre: String::from(".claude3"),
-                archivos: vec![String::from(".credentials.json")],
+            Cuenta {
+                herramienta: nucleo::cuentas::Herramienta::ClaudeCode,
+                carpeta: Path::new(CASA).join(".claude3"),
+                origen: OrigenDeLaCuenta::Busqueda,
             },
         ],
         ..MotorDeMentira::default()
@@ -1272,6 +1453,7 @@ fn la_deteccion_anade_las_cuentas_y_calcula_la_disponibilidad() {
         disponibilidad,
         carpetas,
         anadidos,
+        ..
     } = resultado
     else {
         unreachable!("debía ser una detección")
@@ -1282,20 +1464,23 @@ fn la_deteccion_anade_las_cuentas_y_calcula_la_disponibilidad() {
         [
             "Claude 2",
             "Claude 4",
-            "Claude 1",
             "Claude 3",
             "Gemini 1",
             "Programator 1"
         ]
     );
-    assert_eq!(anadidos, 2);
+    assert_eq!(anadidos, 1);
+    assert_eq!(
+        perfiles[2].directorio_configuracion(),
+        Some("~/.claude3"),
+        "la carpeta de la personal se guarda con «~/»"
+    );
     let casa = Path::new(CASA);
     assert_eq!(
         disponibilidad,
         [
             disponible("/bin/Claude"),
             Disponibilidad::SinCuenta(casa.join(".claude4")),
-            disponible("/bin/Claude"),
             Disponibilidad::SinCuenta(casa.join(".claude3")),
             Disponibilidad::Disponible(casa.join("gemini")),
             Disponibilidad::SinEjecutable,
@@ -1310,7 +1495,6 @@ fn la_deteccion_anade_las_cuentas_y_calcula_la_disponibilidad() {
         [
             carpeta(".claude", true),
             carpeta(".claude4", false),
-            carpeta(".claude", true),
             carpeta(".claude3", false),
             carpeta(".gemini", false),
             None,
@@ -1400,9 +1584,10 @@ fn si_se_pierde_el_trabajador_deja_de_buscar() {
 fn sin_carpeta_personal_no_se_anaden_cuentas() {
     let motor = MotorDeMentira {
         sin_carpeta_personal: true,
-        cuentas: vec![CarpetaPersonal {
-            nombre: String::from(".codex"),
-            archivos: vec![String::from("auth.json")],
+        cuentas: vec![Cuenta {
+            herramienta: nucleo::cuentas::Herramienta::CodexCli,
+            carpeta: Path::new(CASA).join(".codex"),
+            origen: OrigenDeLaCuenta::PorDefecto,
         }],
         ..MotorDeMentira::default()
     };
@@ -1419,7 +1604,7 @@ fn sin_carpeta_personal_no_se_anaden_cuentas() {
     assert!(motor
         .anotado()
         .iter()
-        .all(|linea| !linea.starts_with("explorar")));
+        .all(|linea| !linea.starts_with("cuentas")));
 }
 
 #[test]
@@ -1476,6 +1661,38 @@ fn el_alta_de_cuenta_anade_el_perfil_con_su_carpeta_y_lo_cuenta_para_guardar() {
     );
     assert_eq!(anadidos, 1);
     assert!(motor.anotado().contains(&String::from("elegir cuenta")));
+    // El alta busca las cuentas del equipo una sola vez.
+    assert_eq!(
+        motor
+            .anotado()
+            .iter()
+            .filter(|l| l.starts_with("cuentas "))
+            .count(),
+        1
+    );
+}
+
+/// Sin carpeta personal no se puede saber si la carpeta es la de
+/// otra cuenta, y el alta se rechaza en vez de validarse contra rutas relativas.
+#[test]
+fn sin_carpeta_personal_el_alta_se_rechaza_con_su_motivo() {
+    let motor = MotorDeMentira {
+        sin_carpeta_personal: true,
+        ..MotorDeMentira::default()
+    };
+    let resultado = trabajos::ejecutar(
+        Trabajo::DarDeAltaCuenta {
+            herramienta: HerramientaDelPerfil::Claude,
+            perfiles: perfiles(),
+        },
+        &motor,
+    );
+    assert!(matches!(
+        resultado,
+        ResultadoDeTrabajo::CuentaNoAnadida(Some(
+            nucleo::cuentas::AltaRechazada::SinCarpetaPersonal
+        ))
+    ));
 }
 
 #[test]
@@ -1499,7 +1716,7 @@ fn una_cuenta_rechazada_se_explica_y_no_cambia_los_perfiles() {
 #[test]
 fn la_deteccion_lee_la_version_de_programator_y_la_compara_con_la_publicada() {
     let motor = MotorDeMentira {
-        version_de_programator: Version::leer("0.12.0"),
+        version_de_programator: Version::desde_etiqueta("0.12.0"),
         ..MotorDeMentira::default()
     };
     let mut guardados = perfiles();
@@ -1515,7 +1732,7 @@ fn la_deteccion_lee_la_version_de_programator_y_la_compara_con_la_publicada() {
     };
     assert_eq!(
         carpetas[2].as_ref().and_then(CarpetaDelAgente::version),
-        Version::leer("0.12.0")
+        Version::desde_etiqueta("0.12.0")
     );
     assert!(
         carpetas[0]
@@ -1532,13 +1749,13 @@ fn la_deteccion_lee_la_version_de_programator_y_la_compara_con_la_publicada() {
         None,
         "sin consulta no se avisa"
     );
-    let Some(nueva) = Version::leer("0.13.0") else {
+    let Some(nueva) = Version::desde_etiqueta("0.13.0") else {
         unreachable!("versión válida")
     };
-    aplicacion.fijar_programator_publicado(nucleo::actualizaciones::Publicacion {
-        version: nueva,
-        enlace: String::from("https://github.com/celtidcs/Programator/releases/tag/v0.13.0"),
-    });
-    assert_eq!(aplicacion.version_mas_nueva(2), Version::leer("0.13.0"));
+    aplicacion.fijar_programator_publicado(nueva);
+    assert_eq!(
+        aplicacion.version_mas_nueva(2),
+        Version::desde_etiqueta("0.13.0")
+    );
     assert_eq!(aplicacion.version_mas_nueva(0), None);
 }

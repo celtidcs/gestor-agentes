@@ -54,7 +54,7 @@ fn lanzar(raiz: &Path) -> Result<(), String> {
         identidad: "Claude 9".to_owned(),
         carpeta_proyecto: proyecto,
         nombre_proyecto: "Proyecto de prueba".to_owned(),
-        directorio_configuracion: None,
+        ajuste_de_entorno: None,
         ejecutable: Some(guion),
         argumentos_extra: Vec::new(),
         mensaje_inicial: None,

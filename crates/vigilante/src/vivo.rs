@@ -13,16 +13,12 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use canal::contrato::claves_de_vivo;
 use canal::identidad::Identidad;
 
 use crate::opciones::{Modo, ProcesoMarcado};
 
-/// Nombre del archivo de relevo, en la carpeta del agente (el mismo que en la 3.5.1).
-pub const ARCHIVO_DE_RELEVO: &str = "vigilante.pid";
-/// Nombre del latido de la vigilancia, en la carpeta del recuerdo.
-pub const ARCHIVO_VIVO: &str = "vivo.json";
-/// Nombre del registro de avisos, en la carpeta del recuerdo.
-pub const ARCHIVO_DE_AVISOS: &str = "avisos.log";
+pub use canal::contrato::{ARCHIVO_DE_AVISOS, ARCHIVO_DE_RELEVO, ARCHIVO_VIVO};
 
 /// Segundos desde 1970 en este momento, o 0 si el reloj del sistema está antes de 1970.
 #[must_use]
@@ -76,10 +72,15 @@ pub fn texto_vivo(
     desde: u64,
 ) -> String {
     format!(
-        "{{\"identidad\":\"{identidad}\",\"pid\":{},\"arranque\":{},\"modo\":\"{}\",\"desde\":{desde}}}\n",
+        "{{\"{}\":\"{identidad}\",\"{}\":{},\"{}\":{},\"{}\":\"{}\",\"{}\":{desde}}}\n",
+        claves_de_vivo::IDENTIDAD,
+        claves_de_vivo::PID,
         proceso.pid,
+        claves_de_vivo::ARRANQUE,
         proceso.arranque,
-        nombre_del_modo(modo)
+        claves_de_vivo::MODO,
+        nombre_del_modo(modo),
+        claves_de_vivo::DESDE,
     )
 }
 

@@ -20,16 +20,16 @@ Para la cuarta comprobación de calidad hace falta cargo-audit, que se instala c
 
 En Windows hacen falta las herramientas de compilación de C++ de Visual Studio, que rustup ofrece instalar. El compilador de recursos rc.exe, del Windows SDK, es opcional: solo sirve para poner el icono en gestor-agentes.exe. Si no está, la compilación termina bien, avisa de ello y el ejecutable queda sin icono.
 
-Las dependencias se descargan solas, con las versiones fijadas en el Cargo.lock de la raíz, que se respeta siempre con la opción --locked. Las directas son thiserror, serde, serde_json y chrono en el núcleo; thiserror en el lanzador; y eframe 0.37, con el motor glow, y rfd 0.18 en la interfaz.
+Las dependencias se descargan solas, con las versiones fijadas en el Cargo.lock de la raíz, que se respeta siempre con la opción --locked. El workspace tiene cinco crates propios y una biblioteca común. El crate canal no tiene ninguna dependencia. Las directas de los demás, aparte de los crates propios de los que dependen, son estas: en el núcleo, thiserror, serde, serde_json, chrono y la biblioteca aviso-version-github; en el lanzador, thiserror y serde_json; en el vigilante, sysinfo 0.37, solo con su parte de procesos; y en la interfaz, chrono, thiserror, eframe 0.37 con el motor glow, rfd 0.18 y la misma biblioteca, más winresource como dependencia de compilación para poner el icono en Windows y serde_json como dependencia solo de sus pruebas. La biblioteca, en su versión 0.2.3, está en bibliotecas/aviso-version-github y trae serde, serde_json y ureq 3.4 sin sus funciones por defecto, solo con rustls y las raíces de certificados de webpki-roots; en Windows, ureq lee además el proxy del sistema con winreg. Para sus propias pruebas usa además toml.
 
 El Cargo.toml de la raíz fija para todo el workspace la versión del producto y unas reglas que el compilador hace cumplir. Prohíbe el código unsafe y prohíbe en el código de producción unwrap, expect, panic, todo, unimplemented y dbg. Las comprobaciones tratan cualquier aviso de clippy como error.
 
 
 Generar el paquete portable
 
-En Windows, documentation\infrastructure\build-portable.ps1 genera la carpeta portable con gestor-agentes.exe, la carpeta datos vacía, el LEEME y la documentación. Admite -Destino para elegir otra carpeta de salida y -Objetivo para compilar para otro triple de Rust, como aarch64-pc-windows-msvc.
+En Windows, documentation\infrastructure\build-portable.ps1 genera la carpeta portable con gestor-agentes.exe, el vigilante gestor-vigilante.exe, la carpeta datos vacía, LEEME.txt y la carpeta documentacion, con el Manual de uso, Resolucion de problemas, la Referencia de funcionalidades y Licencia.txt. Admite -Destino para elegir otra carpeta de salida y -Objetivo para compilar para otro triple de Rust, como aarch64-pc-windows-msvc.
 
-En Linux, documentation/infrastructure/build-portable.sh hace lo mismo con gestor-agentes, y admite --destino y --objetivo.
+En Linux, documentation/infrastructure/build-portable.sh hace lo mismo con gestor-agentes y gestor-vigilante, y admite --destino y --objetivo.
 
 Los dos compilan en modo release con las versiones de Cargo.lock y, al regenerar el paquete, conservan lo que haya en datos, que es la configuración del usuario. Cada uno se ejecuta en su propio sistema, porque no hay compilación cruzada preparada. Después, prueba-portable.ps1 o prueba-portable.sh comprueban que el paquete tiene exactamente lo que debe.
 

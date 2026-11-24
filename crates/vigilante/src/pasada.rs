@@ -4,24 +4,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use canal::acuses;
+use canal::contrato;
 use canal::encargos::{self, Encargo};
 use canal::huella;
 use canal::identidad::Identidad;
 use canal::mutaciones;
 
 /// Archivo del canal con el estado común.
-pub const ESTADO: &str = "estado.md";
+pub const ESTADO: &str = contrato::ARCHIVO_ESTADO;
 
 /// Bandeja de Programator. Programator no recibe encargos de nadie por ella: lo que va «Para
 /// <identidad>» en ella es su respuesta al encargo de esa identidad (acuerdo con el proyecto
 /// Programator, 2026-11-22).
 pub const BANDEJA_DE_PROGRAMATOR: &str = "programator.md";
-
-/// Archivos del canal que no se vigilan, en minúsculas: la guía de Programator.
-const NO_VIGILADOS: [&str; 1] = ["como-encargar-a-programator.md"];
-
-/// Prefijos de los históricos del canal, con y sin tilde, que no se vigilan.
-const PREFIJOS_DE_HISTORICO: [&str; 2] = ["historico-", "histórico-"];
 
 /// Lo visto hasta la pasada anterior.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -95,13 +90,7 @@ impl Resultado {
 /// que no son la bandeja propia, la guía de Programator ni un histórico. No distingue mayúsculas.
 #[must_use]
 pub fn se_vigila(nombre: &str, propia: &str) -> bool {
-    let nombre = nombre.to_lowercase();
-    nombre.ends_with(".md")
-        && nombre != propia.to_lowercase()
-        && !NO_VIGILADOS.contains(&nombre.as_str())
-        && !PREFIJOS_DE_HISTORICO
-            .iter()
-            .any(|prefijo| nombre.starts_with(prefijo))
+    contrato::es_archivo_vivo_del_canal(nombre) && !nombre.eq_ignore_ascii_case(propia)
 }
 
 /// Lo visto en una primera pasada: todo lo de ahora, sin avisar de nada.

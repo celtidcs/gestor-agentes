@@ -28,6 +28,8 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+pub use deteccion_agentes::AjusteDeEntorno;
+
 pub mod agy;
 mod base64;
 mod ejecucion;
@@ -43,13 +45,13 @@ pub use entorno_real::EntornoReal;
 /// Variable de entorno con la identidad del agente, que lee la cabecera común de AGENTS.md (el
 /// único archivo de reglas desde la 3.0.0) para que cada agente sepa qué bandeja y qué diario
 /// son suyos.
-pub const VARIABLE_IDENTIDAD: &str = "GESTOR_AGENTE";
+pub const VARIABLE_IDENTIDAD: &str = canal::contrato::VARIABLE_DE_IDENTIDAD;
 
 /// Variable con la ruta absoluta del proyecto que se pone a Claude Code, Codex y agy. El arranque
 /// de AGENTS.md la compara con la carpeta en que trabaja la sesión, para que un agente que se
 /// abra en otra carpeta lo note y pare antes de escribir nada (incidente de agy del 2026-11-18,
 /// que trabajó en otro proyecto).
-pub const VARIABLE_PROYECTO: &str = "GESTOR_PROYECTO";
+pub const VARIABLE_PROYECTO: &str = canal::contrato::VARIABLE_DEL_PROYECTO;
 
 /// Herramienta que se abre, siempre en una terminal y en la carpeta del proyecto. Programator es
 /// nuevo en la 3.0.0.
@@ -100,8 +102,11 @@ pub struct PeticionDeLanzamiento {
     pub carpeta_proyecto: PathBuf,
     /// Nombre del proyecto para el título de la ventana.
     pub nombre_proyecto: String,
-    /// Carpeta de configuración del perfil (CLAUDE_CONFIG_DIR o CODEX_HOME), si la tiene.
-    pub directorio_configuracion: Option<PathBuf>,
+    /// Cómo se ajusta la variable de cuenta de la herramienta (CLAUDE_CONFIG_DIR o CODEX_HOME) al
+    /// abrir su consola, como lo da la biblioteca deteccion-agentes para la cuenta del perfil:
+    /// ponerla con la carpeta de la cuenta, o quitarla en la cuenta por defecto para que la
+    /// consola no herede la de Gestor. `None` no toca el entorno (agy y Programator).
+    pub ajuste_de_entorno: Option<AjusteDeEntorno>,
     /// Ejecutable fijado en el perfil. Obligatorio para Programator; opcional para el resto. Si
     /// está fijado tiene que existir: no se cae a la búsqueda automática (véase
     /// [`detectar_ejecutable`]).

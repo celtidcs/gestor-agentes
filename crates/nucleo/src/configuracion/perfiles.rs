@@ -194,6 +194,12 @@ impl PerfilDeAgente {
         self.ejecutable = None;
     }
 
+    /// Quita la carpeta de configuración fijada: el perfil pasa a usar la cuenta por defecto de su
+    /// herramienta. Solo la usa la puesta al día de las cuentas ([`crate::cuentas`]).
+    pub(crate) fn quitar_directorio(&mut self) {
+        self.directorio_configuracion = None;
+    }
+
     /// El mismo perfil con la carpeta de configuración de `otro` si este no la tiene.
     #[must_use]
     pub(super) fn con_directorio_de(self, otro: Self) -> Self {
@@ -239,13 +245,14 @@ impl PerfilDeAgente {
         expandir(self.ejecutable.as_deref(), carpeta_usuario)
     }
 
-    /// Perfiles de una instalación nueva: una cuenta de cada herramienta, sin ejecutable hasta que
-    /// el usuario lo indique. Las demás cuentas las añade la detección al abrir la ventana (ver
-    /// [`crate::cuentas::incorporar`]) o el alta a mano ([`crate::cuentas::dar_de_alta`]).
+    /// Perfiles de una instalación nueva: una cuenta de cada herramienta, la por defecto, sin
+    /// carpeta ni ejecutable hasta que el usuario los indique. Las demás cuentas las añade la
+    /// búsqueda al abrir la ventana (ver [`crate::cuentas::incorporar_cuentas`]) o el alta a mano
+    /// ([`crate::cuentas::dar_de_alta`]).
     #[must_use]
     pub fn por_defecto() -> Vec<Self> {
         vec![
-            Self::new(HerramientaDelPerfil::Claude, 1).con_directorio("~/.claude"),
+            Self::new(HerramientaDelPerfil::Claude, 1),
             Self::new(HerramientaDelPerfil::Codex, 1),
             Self::new(HerramientaDelPerfil::Gemini, 1),
             Self::new(HerramientaDelPerfil::Programator, 1),

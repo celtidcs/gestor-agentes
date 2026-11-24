@@ -92,6 +92,10 @@ pub const AJUSTE_TIEMPO_ACTUALIZACION_CERO: &str =
 pub const AJUSTE_REPOSITORIO_INVALIDO: &str =
     "RepositorioDeActualizaciones tiene que tener la forma propietario/nombre, como celtidcs/gestor-agentes";
 
+/// Motivo del rechazo de un RepositorioDeProgramator que no tiene la forma propietario/nombre.
+pub const AJUSTE_REPOSITORIO_DE_PROGRAMATOR_INVALIDO: &str =
+    "RepositorioDeProgramator tiene que tener la forma propietario/nombre, como celtidcs/Programator";
+
 // Informe de preparación: estructura.
 
 /// Título del apartado de errores.
@@ -140,6 +144,8 @@ pub const CAMBIO_ARCHIVADO: &str = "archivado";
 pub const CAMBIO_RESPALDADO: &str = "respaldado";
 /// Cambio: repositorio git creado.
 pub const CAMBIO_REPOSITORIO_CREADO: &str = "repositorio git creado";
+/// Cambio: archivo fuera del proyecto sustituido por otro, con copia del anterior.
+pub const CAMBIO_SUSTITUIDO: &str = "sustituido";
 
 /// Descripción de un cambio: se ha borrado algo que ya no se usa.
 pub const CAMBIO_BORRADO: &str = "borrado, porque ya no se usa";
@@ -278,3 +284,18 @@ pub fn codigo_que_cita_las_reglas(archivos: &[String]) -> String {
         archivos.join(", ")
     )
 }
+
+/// Detalle del informe cuando se añaden apartados obligatorios a estado.md.
+#[must_use]
+pub fn apartados_anadidos(apartados: &[&str]) -> String {
+    format!("apartados añadidos: {}", apartados.join(", "))
+}
+
+/// settings.local.json de Claude Code no es un objeto JSON.
+pub const PERMISOS_NO_ES_OBJETO: &str = "no es un objeto JSON";
+
+/// La clave «permissions» de settings.local.json no es un objeto.
+pub const PERMISOS_SIN_OBJETO_DE_PERMISOS: &str = "«permissions» no es un objeto";
+
+/// La clave «permissions.allow» de settings.local.json no es una lista.
+pub const PERMISOS_SIN_LISTA_DE_PERMITIDOS: &str = "«permissions.allow» no es una lista";

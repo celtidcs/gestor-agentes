@@ -1,5 +1,5 @@
 //! Barrera del vigilante de Codex. Hasta la 3.5.1 la cabecera pedía a Codex que montara él mismo su
-//! vigilancia; desde la 3.6.0 (orden del Director del 2026-11-19) Codex lanza una sola vez
+//! vigilancia; desde la 3.6.0 Codex lanza una sola vez
 //! gestor-vigilante en modo persistente, que le entrega los avisos en su sesión con codex queue.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)]

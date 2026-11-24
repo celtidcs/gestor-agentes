@@ -128,7 +128,7 @@ pub fn peticion(herramienta: Herramienta) -> PeticionDeLanzamiento {
         identidad: "Claude 2".to_owned(),
         carpeta_proyecto: PathBuf::from("/proyectos/Demo"),
         nombre_proyecto: "Demo".to_owned(),
-        directorio_configuracion: None,
+        ajuste_de_entorno: None,
         ejecutable: None,
         argumentos_extra: Vec::new(),
         mensaje_inicial: None,

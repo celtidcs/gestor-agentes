@@ -13,6 +13,8 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use canal::contrato::opciones_del_vigilante as op;
+
 /// Vida máxima de --hasta-cambio, en segundos: una jornada de 8 horas, como en los guiones de la
 /// 3.5.1. Es un tope de seguridad; al cumplirlo despierta al agente una vez y este lo relanza.
 pub const VIDA_HASTA_CAMBIO_SEGUNDOS: u64 = 28_800;
@@ -114,45 +116,71 @@ pub fn interpretar(argumentos: &[String]) -> Result<Opciones, OpcionesInvalidas>
     };
     let mut resto = argumentos.iter();
     while let Some(argumento) = resto.next() {
+        if let Some(nuevo) = modo_de(argumento) {
+            fijar_modo(&mut modo, nuevo)?;
+            continue;
+        }
         let mut valor = |nombre: &str| {
             resto
                 .next()
                 .cloned()
                 .ok_or_else(|| OpcionesInvalidas(format!("falta el valor de {nombre}")))
         };
-        match argumento.as_str() {
-            "--una-vez" => fijar_modo(&mut modo, Modo::UnaVez)?,
-            "--hasta-cambio" => fijar_modo(&mut modo, Modo::HastaCambio)?,
-            "--persistente" => fijar_modo(&mut modo, Modo::Persistente)?,
-            "--anotar-hilo" => fijar_modo(&mut modo, Modo::AnotarHilo)?,
-            "--desde-terminal" => {
-                opciones.desde_terminal = Some(numero_de_proceso(&valor("--desde-terminal")?)?);
-            }
-            "--agente" => opciones.agente = Some(valor("--agente")?),
-            "--vida-segundos" => {
-                opciones.vida_segundos = Some(entero_positivo(
-                    "--vida-segundos",
-                    &valor("--vida-segundos")?,
-                )?);
-            }
-            "--entrega" => opciones.entrega = Some(entrega(&valor("--entrega")?)?),
-            "--hijo" => opciones.hijo = true,
-            "--dueno" => opciones.dueno = Some(proceso_marcado(&valor("--dueno")?)?),
-            "--codex" => opciones.codex = Some(PathBuf::from(valor("--codex")?)),
-            "--hilo" => opciones.hilo = Some(valor("--hilo")?),
-            "--gestor" => opciones.gestor = Some(PathBuf::from(valor("--gestor")?)),
-            "--intervalo-segundos" => {
-                opciones.intervalo_segundos =
-                    entero_positivo("--intervalo-segundos", &valor("--intervalo-segundos")?)?;
-            }
-            otro => return Err(OpcionesInvalidas(format!("opción desconocida: {otro}"))),
-        }
+        leer_opcion(&mut opciones, argumento, &mut valor)?;
     }
-    opciones.modo = modo.ok_or_else(|| {
-        OpcionesInvalidas(String::from(
-            "falta el modo: --una-vez, --hasta-cambio, --persistente o --anotar-hilo",
-        ))
-    })?;
+    opciones.modo = modo.ok_or_else(|| OpcionesInvalidas(format!("falta el modo: {MODOS}")))?;
+    comprobar_combinacion(&opciones)?;
+    Ok(opciones)
+}
+
+/// Los modos, para los mensajes de error.
+const MODOS: &str = "--una-vez, --hasta-cambio, --persistente o --anotar-hilo";
+
+/// El modo que pide un argumento, si es uno de los modos.
+fn modo_de(argumento: &str) -> Option<Modo> {
+    match argumento {
+        op::UNA_VEZ => Some(Modo::UnaVez),
+        op::HASTA_CAMBIO => Some(Modo::HastaCambio),
+        op::PERSISTENTE => Some(Modo::Persistente),
+        op::ANOTAR_HILO => Some(Modo::AnotarHilo),
+        _ => None,
+    }
+}
+
+/// Lee una opción que no es un modo; `valor` da el argumento siguiente.
+fn leer_opcion(
+    opciones: &mut Opciones,
+    argumento: &str,
+    valor: &mut dyn FnMut(&str) -> Result<String, OpcionesInvalidas>,
+) -> Result<(), OpcionesInvalidas> {
+    match argumento {
+        op::DESDE_TERMINAL => {
+            opciones.desde_terminal = Some(numero_de_proceso(&valor(op::DESDE_TERMINAL)?)?);
+        }
+        op::AGENTE => opciones.agente = Some(valor(op::AGENTE)?),
+        op::VIDA_SEGUNDOS => {
+            opciones.vida_segundos = Some(entero_positivo(
+                op::VIDA_SEGUNDOS,
+                &valor(op::VIDA_SEGUNDOS)?,
+            )?);
+        }
+        op::ENTREGA => opciones.entrega = Some(entrega(&valor(op::ENTREGA)?)?),
+        op::HIJO => opciones.hijo = true,
+        op::DUENO => opciones.dueno = Some(proceso_marcado(&valor(op::DUENO)?)?),
+        op::CODEX => opciones.codex = Some(PathBuf::from(valor(op::CODEX)?)),
+        op::HILO => opciones.hilo = Some(valor(op::HILO)?),
+        op::GESTOR => opciones.gestor = Some(PathBuf::from(valor(op::GESTOR)?)),
+        op::INTERVALO_SEGUNDOS => {
+            opciones.intervalo_segundos =
+                entero_positivo(op::INTERVALO_SEGUNDOS, &valor(op::INTERVALO_SEGUNDOS)?)?;
+        }
+        otro => return Err(OpcionesInvalidas(format!("opción desconocida: {otro}"))),
+    }
+    Ok(())
+}
+
+/// Combinaciones que no valen aunque cada opción sea correcta.
+fn comprobar_combinacion(opciones: &Opciones) -> Result<(), OpcionesInvalidas> {
     if opciones.modo == Modo::Persistente && opciones.entrega.is_none() {
         return Err(OpcionesInvalidas(String::from(
             "--persistente necesita --entrega codex",
@@ -163,7 +191,7 @@ pub fn interpretar(argumentos: &[String]) -> Result<Opciones, OpcionesInvalidas>
             "--desde-terminal solo vale con --persistente",
         )));
     }
-    Ok(opciones)
+    Ok(())
 }
 
 /// Número de proceso: un entero de 1 en adelante, solo con cifras.
@@ -182,8 +210,8 @@ fn numero_de_proceso(texto: &str) -> Result<u32, OpcionesInvalidas> {
 /// Fija el modo, o falla si ya había uno.
 fn fijar_modo(modo: &mut Option<Modo>, nuevo: Modo) -> Result<(), OpcionesInvalidas> {
     if modo.is_some() {
-        return Err(OpcionesInvalidas(String::from(
-            "solo se puede pedir un modo: --una-vez, --hasta-cambio, --persistente o --anotar-hilo",
+        return Err(OpcionesInvalidas(format!(
+            "solo se puede pedir un modo: {MODOS}"
         )));
     }
     *modo = Some(nuevo);
@@ -202,7 +230,7 @@ fn entero_positivo(opcion: &str, texto: &str) -> Result<u64, OpcionesInvalidas> 
 /// Tipo de entrega por su nombre.
 fn entrega(texto: &str) -> Result<TipoDeEntrega, OpcionesInvalidas> {
     match texto {
-        "codex" => Ok(TipoDeEntrega::Codex),
+        op::ENTREGA_CODEX => Ok(TipoDeEntrega::Codex),
         otro => Err(OpcionesInvalidas(format!("entrega desconocida: {otro}"))),
     }
 }

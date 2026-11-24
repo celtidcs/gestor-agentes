@@ -15,6 +15,8 @@
 
 use serde_json::{Map, Value};
 
+use crate::textos;
+
 /// Archivo de permisos de Claude Code en el proyecto, relativo a la raíz.
 pub const ARCHIVO_DE_CLAUDE: &str = ".claude/settings.local.json";
 
@@ -53,7 +55,7 @@ pub fn fusionar(actual: Option<&str>, reglas: &[&str]) -> Fusion {
         None | Some("") => Map::new(),
         Some(texto) => match serde_json::from_str::<Value>(texto) {
             Ok(Value::Object(mapa)) => mapa,
-            Ok(_) => return Fusion::Ilegible(String::from("no es un objeto JSON")),
+            Ok(_) => return Fusion::Ilegible(String::from(textos::PERMISOS_NO_ES_OBJETO)),
             Err(error) => return Fusion::Ilegible(error.to_string()),
         },
     };
@@ -61,13 +63,13 @@ pub fn fusionar(actual: Option<&str>, reglas: &[&str]) -> Fusion {
         .entry("permissions")
         .or_insert_with(|| Value::Object(Map::new()));
     let Value::Object(permisos) = permisos else {
-        return Fusion::Ilegible(String::from("«permissions» no es un objeto"));
+        return Fusion::Ilegible(String::from(textos::PERMISOS_SIN_OBJETO_DE_PERMISOS));
     };
     let permitidas = permisos
         .entry("allow")
         .or_insert_with(|| Value::Array(Vec::new()));
     let Value::Array(permitidas) = permitidas else {
-        return Fusion::Ilegible(String::from("«permissions.allow» no es una lista"));
+        return Fusion::Ilegible(String::from(textos::PERMISOS_SIN_LISTA_DE_PERMITIDOS));
     };
     let faltan: Vec<Value> = reglas
         .iter()

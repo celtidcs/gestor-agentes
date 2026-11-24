@@ -167,12 +167,11 @@ impl Configuracion {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(origen) => return Err(disco(&ruta, origen)),
         };
-        serde_json::from_str::<Option<T>>(texto.trim_start_matches('\u{FEFF}')).map_err(|error| {
-            ErrorDeConfiguracion::FormatoInvalido {
+        serde_json::from_str::<Option<T>>(crate::instrucciones::formato::quitar_bom(&texto))
+            .map_err(|error| ErrorDeConfiguracion::FormatoInvalido {
                 ruta,
                 motivo: error.to_string(),
-            }
-        })
+            })
     }
 
     fn escribir_json<T: Serialize + ?Sized>(

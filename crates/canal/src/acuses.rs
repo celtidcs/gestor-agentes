@@ -1,6 +1,6 @@
 //! Acuses de recibo: si el agente ya dejó constancia en su bandeja de haber leído un encargo.
 //!
-//! Un encargo se nombra con una etiqueta corta en su primera línea, como «PING-1» o «VERIF-360D».
+//! Un encargo se nombra con una etiqueta corta en su primera línea, como «PING-1» o «REV-12».
 //! Cuenta como acusado si la bandeja del agente tiene, en una intervención con un LATIDO igual o
 //! posterior al del encargo, una línea con esa etiqueta y la palabra «recibido» en cualquier forma
 //! de mayúsculas («RECIBIDO 14:48:22: … PING-1», «PING-1 recibido 13:27:10»). Así un vigilante que
@@ -11,9 +11,6 @@ use crate::encargos;
 /// Palabra del acuse, en minúsculas.
 const PALABRA_DE_ACUSE: &str = "recibido";
 
-/// Caracteres que cierran la lista de destinatarios de un «Para», como en [`crate::encargos`].
-const FIN_DE_LISTA: [char; 4] = [':', ';', '.', '—'];
-
 /// Largo mínimo de una etiqueta: «M1» o «T4» son demasiado comunes para fiarse.
 const LARGO_MINIMO_DE_ETIQUETA: usize = 3;
 
@@ -21,11 +18,13 @@ const LARGO_MINIMO_DE_ETIQUETA: usize = 3;
 const LARGO_DE_FECHA_Y_HORA: usize = 19;
 
 /// Etiqueta del encargo en su primera línea: la primera palabra, tras la lista de destinatarios,
-/// escrita en mayúsculas y cifras con al menos una cifra o un guion («PING-1», «VERIF-360D»).
+/// escrita en mayúsculas y cifras con al menos una cifra o un guion («PING-1», «REV-12»).
 #[must_use]
 pub fn etiqueta(primera_linea: &str) -> Option<String> {
-    let tras_para = primera_linea.split_once("Para ")?.1;
-    let resto = tras_para.split_once(|c| FIN_DE_LISTA.contains(&c))?.1;
+    let tras_para = primera_linea.split_once(encargos::PALABRA_DEL_ENCARGO)?.1;
+    let resto = tras_para
+        .split_once(|c| encargos::FIN_DE_LISTA.contains(&c))?
+        .1;
     palabras(resto)
         .find(|palabra| es_etiqueta(palabra))
         .map(str::to_owned)

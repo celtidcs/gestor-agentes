@@ -9,6 +9,7 @@ use lanzador::ErrorDeLanzamiento;
 use nucleo::actualizaciones::Version;
 use nucleo::configuracion::ErrorDeConfiguracion;
 use nucleo::cuentas::AltaRechazada;
+use nucleo::migracion_de_claude::{ErrorDeMigracion, MigracionHecha};
 
 use crate::perfiles::{CarpetaDelAgente, Disponibilidad, EstadoDelAgente};
 
@@ -125,6 +126,22 @@ pub fn papel_anotado(identidad: &str, papel: nucleo::proyecto::papeles::Papel) -
 /// Título del aviso de versión nueva.
 pub const TITULO_ACTUALIZACION: &str = "Actualización disponible";
 
+/// Comienzo de la línea que deja en el registro un fallo al comprobar si hay una versión nueva.
+pub const REGISTRO_DEL_AVISO_DE_VERSION: &str = "Gestor Agentes, comprobación de versión nueva";
+
+/// Nombre de Programator en los textos.
+pub const PROGRAMATOR: &str = "Programator";
+
+/// Qué comprobación de versión falló, para el registro: «de Programator (celtidcs/Programator)».
+#[must_use]
+pub fn que_se_comprueba(programa: &str, repositorio: &str) -> String {
+    format!("de {programa} ({repositorio})")
+}
+
+/// Fallo al identificar a Gestor Agentes ante GitHub; la consulta sale entonces sin su nombre.
+pub const IDENTIFICACION_NO_VALIDA: &str =
+    "de Gestor Agentes: no se puede identificar ante GitHub y la consulta sale sin su nombre";
+
 /// Texto del aviso de versión nueva: cuál hay, cuál tienes y dónde se descarga.
 #[must_use]
 pub fn actualizacion_disponible(nueva: &str, instalada: &str, enlace: &str) -> String {
@@ -190,7 +207,47 @@ pub fn cuenta_rechazada(rechazo: &AltaRechazada) -> String {
         AltaRechazada::CarpetaEnUso(perfil) => {
             format!("Esa carpeta ya es la de {perfil}. Cada cuenta necesita su propia carpeta.")
         }
+        AltaRechazada::SinCarpetaPersonal => String::from(
+            "No se sabe cuál es tu carpeta de usuario, así que no se puede comprobar si esa \
+             carpeta ya es la de otra cuenta.",
+        ),
+        AltaRechazada::RutaNoValida => String::from(
+            "La ruta de esa carpeta tiene caracteres que la lista de agentes no puede guardar. \
+             Cámbiale el nombre o elige otra.",
+        ),
     }
+}
+
+/// Detalle del informe de apertura para la migración única del estado de la cuenta por defecto de
+/// Claude Code (3.9.0), que abre el agente `identidad`: con qué se ha sustituido el archivo, dónde
+/// queda la copia del anterior y cómo queda marcada.
+#[must_use]
+pub fn estado_de_claude_migrado(hecha: &MigracionHecha, identidad: &str) -> String {
+    let copia = if hecha.con_copia {
+        format!(
+            " La versión anterior está guardada en {}.",
+            hecha.rutas.copia.display()
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "{identidad} se abre ahora sin CLAUDE_CONFIG_DIR, como la cuenta por defecto de Claude \
+         Code; para que conserve sus proyectos y ajustes, se ha puesto en su lugar {}.{copia} \
+         Ese archivo se ha renombrado a {} para que no se vuelva a copiar",
+        hecha.rutas.origen.display(),
+        hecha.rutas.migrado.display()
+    )
+}
+
+/// Error de la migración del estado de la cuenta por defecto de Claude Code: el agente `identidad`
+/// se abre igual, y se volverá a intentar la próxima vez.
+#[must_use]
+pub fn estado_de_claude_sin_migrar(error: &ErrorDeMigracion, identidad: &str) -> String {
+    format!(
+        "No se ha podido pasar el estado de {identidad} a la cuenta por defecto de Claude Code \
+         ({error}). Se volverá a intentar la próxima vez que se abra {identidad}."
+    )
 }
 
 /// Título del selector de archivos del ejecutable.
@@ -244,11 +301,11 @@ pub fn estado_de_agente(
     partes.join(SEPARADOR_DE_ESTADO)
 }
 
-/// Aviso de que la ruta de Programator apunta a una versión anterior a la publicada (F7).
+/// Aviso de que la ruta de Programator apunta a una versión anterior a la publicada.
 #[must_use]
 pub fn programator_anticuado(nueva: Version) -> String {
     format!(
-        "la ruta de Programator apunta a una versión antigua; hay la {nueva}: descárgala y cambia          la ruta en la pestaña Agentes"
+        "la ruta de Programator apunta a una versión antigua; hay la {nueva}: descárgala y cambia la ruta en la pestaña Agentes"
     )
 }
 
@@ -298,6 +355,12 @@ pub fn cuentas_anadidas(cuantas: usize) -> String {
 pub fn perfiles_no_guardados(error: &ErrorDeConfiguracion) -> String {
     format!("No se pudieron guardar los agentes: {error}")
 }
+
+/// Barra de estado cuando no se guarda la lista de agentes porque perfiles-agentes.json no se pudo
+/// leer al arrancar: guardarla borraría lo que el usuario tiene en ese archivo.
+pub const PERFILES_ILEGIBLES_SIN_GUARDAR: &str = "No se guarda la lista de agentes porque \
+perfiles-agentes.json no se pudo leer al arrancar. Corrígelo con la aplicación cerrada y vuelve a \
+abrirla.";
 
 /// Explicación encima del núcleo común.
 pub const EXPLICACION_NUCLEO: &str = "Núcleo común que Gestor Agentes escribe en AGENTS.md, el \

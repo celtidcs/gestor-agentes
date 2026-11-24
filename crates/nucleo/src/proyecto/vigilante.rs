@@ -16,7 +16,7 @@ use crate::textos;
 pub const CARPETA_DEL_VIGILANTE: &str = ".gestor/vigilante";
 
 /// Nombre del ejecutable sin extensión. En Windows lleva .exe ([`nombre_del_ejecutable`]).
-pub const NOMBRE_DEL_VIGILANTE: &str = "gestor-vigilante";
+pub const NOMBRE_DEL_VIGILANTE: &str = canal::contrato::NOMBRE_DEL_VIGILANTE;
 
 /// Sufijo de la copia anterior mientras sigue en uso: en Windows un ejecutable en marcha no se
 /// puede sobrescribir, pero sí cambiar de nombre.
@@ -90,10 +90,9 @@ pub fn instalar(
 /// Cambia de nombre la copia que hay, que puede estar en marcha, tras borrar la apartada de una
 /// vez anterior si ya nadie la usa.
 fn apartar_la_copia_en_uso(destino: &Path) -> io::Result<()> {
-    let apartada = PathBuf::from(format!(
-        "{}{SUFIJO_DE_LA_COPIA_ANTERIOR}",
-        destino.to_string_lossy()
-    ));
+    let mut apartada = destino.as_os_str().to_owned();
+    apartada.push(SUFIJO_DE_LA_COPIA_ANTERIOR);
+    let apartada = PathBuf::from(apartada);
     if apartada.exists() && fs::remove_file(&apartada).is_err() {
         // La copia apartada sigue en marcha: se sobrescribe directamente la actual si se puede.
         return Ok(());

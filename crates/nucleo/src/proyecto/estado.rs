@@ -70,7 +70,7 @@ impl EstadoDelProyecto {
         };
         let marca = marcas::inicio(marcas::NUCLEO_COMUN);
         // Sin BOM y con \r, \n o \r\n como separador de línea.
-        let reglas = reglas.trim_start_matches('\u{FEFF}');
+        let reglas = crate::instrucciones::formato::quitar_bom(reglas);
         let tiene_nucleo = reglas
             .split(['\r', '\n'])
             .any(|linea| linea.trim() == marca);

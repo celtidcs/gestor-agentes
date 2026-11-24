@@ -12,17 +12,23 @@ use std::path::Path;
 use super::archivos;
 use super::informe::{InformeDeInicializacion, TipoDeCambio};
 use super::momento::Momento;
-use super::revision_del_canal::APARTADOS_OBLIGATORIOS;
-use crate::agentes::CARPETA_CANAL;
-use crate::instrucciones::formato::FormatoDeTexto;
+use canal::{apartados, contrato};
 
-/// Ruta de estado.md, relativa al proyecto.
-fn ruta_del_estado() -> String {
-    format!("{CARPETA_CANAL}/estado.md")
-}
+use super::revision_del_canal::APARTADOS_OBLIGATORIOS;
+use crate::instrucciones::formato::FormatoDeTexto;
+use crate::textos;
 
 /// Apartado de los papeles.
-const APARTADO_PAPELES: &str = "## Papeles";
+pub const APARTADO_PAPELES: &str = "## Papeles";
+
+/// Principio de la línea del Jefe en el apartado de papeles de la plantilla.
+const LINEA_DEL_JEFE: &str = "- Jefe de proyecto:";
+
+/// Lo que sigue al Jefe en la plantilla cuando todavía no hay ninguno.
+const JEFE_SIN_ASIGNAR: &str = "sin asignar";
+
+/// Principio de una línea de la lista del apartado.
+const VINETA: &str = "- ";
 
 /// Cuerpo con que se añade un apartado que falta, como en la plantilla de estado.md.
 const CUERPO_VACIO: &str = "Ninguna.";
@@ -60,7 +66,7 @@ pub fn completar_apartados(estado: &str) -> Option<(String, Vec<&'static str>)> 
     let faltan: Vec<&'static str> = APARTADOS_OBLIGATORIOS
         .iter()
         .copied()
-        .filter(|titulo| !tiene_apartado(estado, titulo))
+        .filter(|titulo| !apartados::tiene(estado, titulo))
         .collect();
     if faltan.is_empty() {
         return None;
@@ -101,7 +107,7 @@ pub fn anotar_papel(estado: &str, identidad: &str, papel: Papel, momento: &str) 
         return (base != estado).then_some(base);
     }
     let lineas: Vec<&str> = base.lines().collect();
-    let (inicio, fin) = limites_de_papeles(&lineas)?;
+    let (inicio, fin) = apartados::limites(&lineas, APARTADO_PAPELES)?;
     let ultima_con_texto = (inicio..fin)
         .rev()
         .find(|&i| !lineas[i].trim().is_empty())
@@ -116,6 +122,42 @@ pub fn anotar_papel(estado: &str, identidad: &str, papel: Papel, momento: &str) 
         resultado.insert(ultima_con_texto + 1, nueva);
     }
     Some(resultado.join("\n") + "\n")
+}
+
+/// El Jefe vigente según el apartado de papeles: el de la línea más reciente que nombra uno (paso
+/// 6 del arranque). Vale la línea de la plantilla, «- Jefe de proyecto: <texto>», que da el texto
+/// entero, y la línea fechada de un agente, «- <Identidad>, <fecha>: **Jefe de proyecto** …», como
+/// la que anota la aplicación, que da la identidad. Una línea posterior que da a ese mismo agente
+/// otro papel lo releva. Nada si no hay apartado o el Jefe está sin asignar.
+#[must_use]
+pub fn jefe_vigente(estado: &str) -> Option<String> {
+    let mut jefe: Option<String> = None;
+    for linea in apartados::lineas(estado, APARTADO_PAPELES)? {
+        if let Some(resto) = linea.strip_prefix(LINEA_DEL_JEFE) {
+            let texto = resto.trim().trim_end_matches('.');
+            jefe = (!texto.is_empty() && !texto.starts_with(JEFE_SIN_ASIGNAR))
+                .then(|| texto.to_owned());
+            continue;
+        }
+        let Some((agente, papel)) = papel_fechado(linea) else {
+            continue;
+        };
+        match papel {
+            Papel::Jefe => jefe = Some(agente.to_owned()),
+            Papel::Ayudante if jefe.as_deref() == Some(agente) => jefe = None,
+            Papel::Ayudante => {}
+        }
+    }
+    jefe
+}
+
+/// Agente y papel de una línea fechada «- <Identidad>, <fecha>: **<papel>** …».
+fn papel_fechado(linea: &str) -> Option<(&str, Papel)> {
+    let (agente, resto) = linea.strip_prefix(VINETA)?.split_once(',')?;
+    let papel = [Papel::Jefe, Papel::Ayudante]
+        .into_iter()
+        .find(|papel| resto.contains(&format!("**{}**", papel.nombre())))?;
+    Some((agente.trim(), papel))
 }
 
 /// El papel de la última línea que la aplicación anotó para esa identidad, si la hay.
@@ -133,19 +175,6 @@ pub fn papel_anotado_por_gestor(estado: &str, identidad: &str) -> Option<Papel> 
         })
 }
 
-/// Posición del título «## Papeles» y del final de su apartado (el siguiente título o el final del
-/// texto).
-fn limites_de_papeles(lineas: &[&str]) -> Option<(usize, usize)> {
-    let inicio = lineas
-        .iter()
-        .position(|linea| linea.trim() == APARTADO_PAPELES)?;
-    let fin = lineas[inicio + 1..]
-        .iter()
-        .position(|linea| linea.trim_start().starts_with('#'))
-        .map_or(lineas.len(), |i| inicio + 1 + i);
-    Some((inicio, fin))
-}
-
 /// El papel de la última línea que la aplicación anotó para esa identidad, si sigue vigente: no
 /// hay después otra línea de esa identidad (la más reciente manda, paso 6 del arranque) ni, si es
 /// Jefe, otra línea que nombre un Jefe (solo hay uno). Solo cuentan las líneas del apartado de
@@ -153,7 +182,7 @@ fn limites_de_papeles(lineas: &[&str]) -> Option<(usize, usize)> {
 fn papel_vigente_anotado_por_gestor(estado: &str, identidad: &str) -> Option<Papel> {
     let prefijo = format!("- {identidad}, ");
     let todas: Vec<&str> = estado.lines().collect();
-    let (inicio, fin) = limites_de_papeles(&todas)?;
+    let (inicio, fin) = apartados::limites(&todas, APARTADO_PAPELES)?;
     let lineas = &todas[inicio + 1..fin];
     let posicion = lineas
         .iter()
@@ -162,14 +191,9 @@ fn papel_vigente_anotado_por_gestor(estado: &str, identidad: &str) -> Option<Pap
     let jefe = Papel::Jefe.nombre();
     let relevado = lineas[posicion + 1..].iter().any(|linea| {
         linea.starts_with(&prefijo)
-            || (papel == Papel::Jefe && linea.starts_with("- ") && linea.contains(jefe))
+            || (papel == Papel::Jefe && linea.starts_with(VINETA) && linea.contains(jefe))
     });
     (!relevado).then_some(papel)
-}
-
-/// Si estado.md tiene el apartado, con o sin espacios a los lados del título.
-fn tiene_apartado(estado: &str, titulo: &str) -> bool {
-    estado.lines().any(|linea| linea.trim() == titulo)
 }
 
 /// Añade a estado.md, en disco, los apartados obligatorios que falten. Si estado.md no existe no
@@ -179,7 +203,7 @@ fn tiene_apartado(estado: &str, titulo: &str) -> bool {
 ///
 /// El error de disco al leer o escribir estado.md.
 pub fn completar_en_disco(raiz: &Path, informe: &mut InformeDeInicializacion) -> io::Result<()> {
-    let relativa = ruta_del_estado();
+    let relativa = contrato::ruta_relativa_del_estado();
     let ruta = archivos::ruta(raiz, &relativa);
     let Some((estado, formato)) = archivos::leer(&ruta)? else {
         return Ok(());
@@ -189,7 +213,7 @@ pub fn completar_en_disco(raiz: &Path, informe: &mut InformeDeInicializacion) ->
         informe.anotar_cambio(
             &relativa,
             TipoDeCambio::Actualizado,
-            Some(format!("apartados añadidos: {}", anadidos.join(", "))),
+            Some(textos::apartados_anadidos(&anadidos)),
         );
     }
     Ok(())
@@ -207,14 +231,10 @@ pub fn anotar_en_disco(
     papel: Papel,
     momento: Momento,
 ) -> io::Result<bool> {
-    let ruta = archivos::ruta(raiz, &ruta_del_estado());
+    let ruta = archivos::ruta(raiz, &contrato::ruta_relativa_del_estado());
     let (estado, formato) =
         archivos::leer(&ruta)?.unwrap_or_else(|| (String::new(), FormatoDeTexto::default()));
-    let fecha_y_hora = momento.como_fecha_y_hora().map_or_else(
-        || momento.fecha_iso(),
-        |f| f.format(FORMATO_DE_MOMENTO).to_string(),
-    );
-    match anotar_papel(&estado, identidad, papel, &fecha_y_hora) {
+    match anotar_papel(&estado, identidad, papel, &momento.to_string()) {
         Some(texto) => {
             archivos::escribir(&ruta, &texto, formato)?;
             Ok(true)
@@ -222,6 +242,3 @@ pub fn anotar_en_disco(
         None => Ok(false),
     }
 }
-
-/// Fecha y hora como las escriben los agentes en el canal.
-const FORMATO_DE_MOMENTO: &str = "%Y-%m-%d %H:%M:%S";

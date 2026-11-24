@@ -7,6 +7,9 @@
 
 use std::ffi::OsString;
 
+use canal::contrato;
+use canal::contrato::opciones_del_vigilante as op;
+
 use crate::base64::orden_codificada_powershell;
 use crate::escapes::{comilla_simple_bash, comilla_simple_powershell};
 
@@ -78,31 +81,51 @@ impl TerminalLinux {
     }
 }
 
-/// Vigilante del canal dentro del proyecto, relativo a su carpeta. Lo copia ahí Gestor Agentes
-/// (nucleo::proyecto::vigilante, CARPETA_DEL_VIGILANTE y NOMBRE_DEL_VIGILANTE).
-const VIGILANTE_POWERSHELL: &str = ".gestor\\vigilante\\gestor-vigilante.exe";
+/// Separador de carpetas de PowerShell en Windows.
+const SEPARADOR_DE_WINDOWS: char = '\\';
+
+/// Extensión de los ejecutables de Windows.
+const EXTENSION_DE_WINDOWS: &str = ".exe";
+
+/// Vigilante del canal dentro del proyecto, relativo a su carpeta, para PowerShell. Lo copia ahí
+/// Gestor Agentes (nucleo::proyecto::vigilante).
+fn vigilante_powershell() -> String {
+    contrato::ruta_relativa_del_vigilante(SEPARADOR_DE_WINDOWS, EXTENSION_DE_WINDOWS)
+}
 
 /// El mismo vigilante, para bash.
-const VIGILANTE_BASH: &str = ".gestor/vigilante/gestor-vigilante";
+fn vigilante_bash() -> String {
+    contrato::ruta_relativa_del_vigilante('/', "")
+}
 
 /// Opciones del vigilante persistente de Codex que lanza la terminal antes de abrirlo. La terminal
 /// añade su propio número de proceso tras ellas, y la identidad le llega en GESTOR_AGENTE.
-const OPCIONES_DEL_VIGILANTE_DE_CODEX: &str = "--persistente --entrega codex --desde-terminal";
+fn opciones_del_vigilante_de_codex() -> String {
+    [
+        op::PERSISTENTE,
+        op::ENTREGA,
+        op::ENTREGA_CODEX,
+        op::DESDE_TERMINAL,
+    ]
+    .join(" ")
+}
 
 /// Línea de PowerShell que, si el proyecto tiene el vigilante, lo deja en segundo plano y oculto
 /// vigilando para la sesión de Codex que se abre a continuación en esta terminal. Va fuera del
 /// sandbox de Codex, que no le deja ver los procesos.
 fn vigilante_de_codex_powershell() -> String {
+    let vigilante = vigilante_powershell();
+    let opciones = opciones_del_vigilante_de_codex();
     format!(
-        "if (Test-Path -LiteralPath '{VIGILANTE_POWERSHELL}') {{ Start-Process -FilePath '{VIGILANTE_POWERSHELL}' -ArgumentList \"{OPCIONES_DEL_VIGILANTE_DE_CODEX} $PID\" -WindowStyle Hidden }}"
+        "if (Test-Path -LiteralPath '{vigilante}') {{ Start-Process -FilePath '{vigilante}' -ArgumentList \"{opciones} $PID\" -WindowStyle Hidden }}"
     )
 }
 
 /// Lo mismo en bash, con la salida descartada para no ensuciar la terminal.
 fn vigilante_de_codex_bash() -> String {
-    format!(
-        "if [ -x '{VIGILANTE_BASH}' ]; then '{VIGILANTE_BASH}' {OPCIONES_DEL_VIGILANTE_DE_CODEX} $$ >/dev/null 2>&1 & fi; "
-    )
+    let vigilante = vigilante_bash();
+    let opciones = opciones_del_vigilante_de_codex();
+    format!("if [ -x '{vigilante}' ]; then '{vigilante}' {opciones} $$ >/dev/null 2>&1 & fi; ")
 }
 
 /// Variable de entorno que se fija dentro del guion de la terminal.
@@ -113,17 +136,27 @@ pub(crate) struct Asignacion<'a> {
     pub(crate) valor: &'a str,
 }
 
+/// Lo que la terminal lanza antes del agente.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PrevioDeTerminal {
+    /// Nada.
+    Ninguno,
+    /// El vigilante persistente de Codex, oculto y en segundo plano.
+    VigilanteDeCodex,
+}
+
 /// Guion de PowerShell que fija el título (y lo restaura cada segundo con un temporizador, porque
-/// las interfaces de terminal de los agentes lo cambian), asigna las variables, entra en la
-/// carpeta, lanza el vigilante de Codex si `con_vigilante_de_codex` y ejecuta el programa con sus
+/// las interfaces de terminal de los agentes lo cambian), quita las variables `quitadas`, asigna
+/// las demás, entra en la carpeta, lanza lo que pida `previo` y ejecuta el programa con sus
 /// argumentos.
 pub(crate) fn guion_powershell(
     titulo: &str,
     variables: &[Asignacion<'_>],
+    quitadas: &[&str],
     carpeta: &str,
     ejecutable: &str,
     argumentos: &[&str],
-    con_vigilante_de_codex: bool,
+    previo: PrevioDeTerminal,
 ) -> String {
     let mut partes = vec![
         format!("$t = '{}'", comilla_simple_powershell(titulo)),
@@ -136,6 +169,9 @@ pub(crate) fn guion_powershell(
         ),
         format!("[{CLASE_DEL_TITULO}]::Fijar($t)"),
     ];
+    partes.extend(quitadas.iter().map(|nombre| {
+        format!("Remove-Item -LiteralPath 'Env:{nombre}' -ErrorAction SilentlyContinue")
+    }));
     partes.extend(variables.iter().map(|v| {
         format!(
             "$env:{} = '{}'",
@@ -147,7 +183,7 @@ pub(crate) fn guion_powershell(
         "Set-Location -LiteralPath '{}'",
         comilla_simple_powershell(carpeta)
     ));
-    if con_vigilante_de_codex {
+    if previo == PrevioDeTerminal::VigilanteDeCodex {
         partes.push(vigilante_de_codex_powershell());
     }
     let mut llamada = format!("& '{}'", comilla_simple_powershell(ejecutable));
@@ -169,22 +205,29 @@ pub(crate) fn argumentos_powershell(guion: &str) -> Vec<OsString> {
     ]
 }
 
-/// Guion de bash que exporta las variables, entra en la carpeta, lanza el vigilante de Codex si
-/// `con_vigilante_de_codex`, ejecuta el programa con sus argumentos y, al terminar, deja abierta
+/// Guion de bash que quita las variables `quitadas`, exporta las demás, entra en la carpeta,
+/// lanza lo que pida `previo`,
+/// ejecuta el programa con sus argumentos y, al terminar, deja abierta
 /// la ventana con `exec bash` (como -NoExit en PowerShell).
 pub(crate) fn guion_bash(
     variables: &[Asignacion<'_>],
+    quitadas: &[&str],
     carpeta: &str,
     ejecutable: &str,
     argumentos: &[&str],
-    con_vigilante_de_codex: bool,
+    previo: PrevioDeTerminal,
 ) -> String {
-    let mut guion: String = variables
+    let mut guion: String = quitadas
         .iter()
-        .map(|v| format!("export {}='{}'; ", v.nombre, comilla_simple_bash(v.valor)))
+        .map(|nombre| format!("unset {nombre}; "))
+        .chain(
+            variables
+                .iter()
+                .map(|v| format!("export {}='{}'; ", v.nombre, comilla_simple_bash(v.valor))),
+        )
         .collect();
     anadir_entre_comillas(&mut guion, "cd ", &comilla_simple_bash(carpeta), "; ");
-    if con_vigilante_de_codex {
+    if previo == PrevioDeTerminal::VigilanteDeCodex {
         guion.push_str(&vigilante_de_codex_bash());
     }
     anadir_entre_comillas(&mut guion, "", &comilla_simple_bash(ejecutable), "");

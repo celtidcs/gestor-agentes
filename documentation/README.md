@@ -14,7 +14,7 @@ Descarga el paquete portable de tu sistema, descomprímelo donde quieras y abre 
 
 Para compilarla
 
-Está escrita en Rust y organizada en un workspace de cargo con cinco partes, cada una con una sola responsabilidad. La parte canal lee el canal de los agentes, sus encargos y sus mutaciones vivas. La parte nucleo prepara los proyectos y guarda la configuración. La parte lanzador decide cómo se abre cada agente en cada sistema y lo abre. La parte vigilante genera el ejecutable gestor-vigilante, que vigila el canal por cada agente. La parte interfaz es la ventana, hecha con eframe y egui, y genera el ejecutable gestor-agentes. La versión se declara en un solo sitio, el Cargo.toml de la raíz, y sigue la numeración de tres cifras de Semantic Versioning: mayor, menor y corrección.
+Está escrita en Rust y organizada en un workspace de cargo con cinco partes propias, cada una con una sola responsabilidad, y dos bibliotecas comunes. La parte canal, que no depende de nada y de la que dependen todas las demás, lee el canal de los agentes, sus encargos, sus acuses de recibo y sus mutaciones vivas, y reúne los nombres que comparten la aplicación, el lanzador y el vigilante. La parte nucleo prepara los proyectos, compone el estado del equipo que muestra la ventana y guarda la configuración. La parte lanzador decide cómo se abre cada agente en cada sistema y lo abre. La parte vigilante genera el ejecutable gestor-vigilante, que vigila el canal por cada agente. La parte interfaz es la ventana, hecha con eframe y egui, y genera el ejecutable gestor-agentes. La biblioteca común aviso-version-github, en la carpeta bibliotecas, consulta en GitHub si hay una versión nueva, y la usan el núcleo y la interfaz. La biblioteca común deteccion-agentes, también en esa carpeta, encuentra las cuentas de los agentes que hay en el equipo, y la usan el núcleo y el lanzador. La versión se declara en un solo sitio, el Cargo.toml de la raíz, y sigue la numeración de tres cifras de Semantic Versioning: mayor, menor y corrección.
 
 Para generar el paquete portable desde el código se ejecuta infrastructure/build-portable.ps1 en Windows o infrastructure/build-portable.sh en Linux. Si además quieres comprobar que el equipo tiene todo lo necesario y pasar las comprobaciones de calidad, usa infrastructure/setup.ps1 o infrastructure/setup.sh. La guía infrastructure/clone-guide.md explica cómo preparar desde cero un equipo nuevo para desarrollar.
 
@@ -24,6 +24,8 @@ Documentos
 El manual de uso, usage.md, explica la aplicación paso a paso para quien no la conoce; en el paquete portable se llama Manual de uso.
 
 La referencia de funcionalidades, features.md, describe con detalle técnico todo lo que hace la aplicación; en el paquete se llama Referencia de funcionalidades.
+
+El paquete portable lleva además en su carpeta documentacion la guía Resolucion de problemas, que sale de infrastructure/portable-extras/documentacion, y Licencia.txt, que es una copia del archivo LICENSE de la raíz.
 
 La arquitectura, architecture.md, explica cómo está organizado el código y por qué se tomó cada decisión.
 

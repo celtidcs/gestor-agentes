@@ -33,7 +33,7 @@ No sustituye a los agentes. Claude Code, Codex, agy y Programator son programas 
 
 No obliga por la fuerza a cumplir las reglas. Las reservas de archivos y la prohibición de escribir fuera del proyecto las hacen cumplir las instrucciones y la verificación de otro agente, no la aplicación. La revisión del canal comprueba la forma de los archivos, no lo que dicen los mensajes.
 
-No avisa igual a todos los agentes. Claude Code y agy dejan en segundo plano un vigilante que los despierta con el primer encargo para ellos, y Codex se monta él mismo su vigilancia al arrancar. Si no lo consiguen, solo ven los mensajes nuevos cuando miran el canal al terminar cada paso, así que si están parados esperando, díselo tú.
+No avisa igual a todos los agentes. Claude Code y agy dejan en segundo plano un vigilante que los despierta con el primer encargo para ellos. A Codex se lo deja en marcha la propia aplicación desde su terminal, y el vigilante le entrega cada aviso dentro de la sesión que Codex le anota al arrancar. Si no lo consiguen, solo ven los mensajes nuevos cuando miran el canal al terminar cada paso, así que si están parados esperando, díselo tú.
 
 No abre la ventana en un Windows sin OpenGL 2.0, como el que tienen muchas máquinas virtuales con el adaptador básico de Windows. Se arregla instalando el complemento gratuito de Microsoft OpenCL, OpenGL, and Vulkan Compatibility Pack. Este y los demás límites están contados, con su solución cuando la tienen, en documentation/defectos-conocidos.md.
 
@@ -86,13 +86,19 @@ Para preparar un equipo y compilar, la guía documentation/infrastructure/clone-
 
 Estructura del código fuente
 
-El código está organizado en un workspace de cargo con tres partes, cada una con una sola responsabilidad.
+El código está organizado en un workspace de cargo con cinco partes propias, cada una con una sola responsabilidad, y dos bibliotecas comunes.
 
-La parte nucleo prepara los proyectos, escribe las instrucciones de los agentes, revisa el canal y guarda la configuración, los agentes y las cuentas.
+La parte canal lee el canal de los agentes, sus encargos, sus acuses de recibo y sus mutaciones vivas, y reúne los nombres de carpetas, archivos y variables que comparten las demás partes. No depende de nada, y todas las demás dependen de ella.
+
+La parte nucleo prepara los proyectos, escribe las instrucciones de los agentes, revisa el canal, compone el estado del equipo que muestra la ventana y guarda la configuración, los agentes y las cuentas.
 
 La parte lanzador decide cómo se abre cada agente en cada sistema, con qué terminal y con qué entorno, y lo abre.
 
+La parte vigilante genera el ejecutable gestor-vigilante, que vigila el canal por cada agente y le avisa de lo que le toca.
+
 La parte interfaz es la ventana, hecha con eframe y egui, y genera el ejecutable gestor-agentes.
+
+La biblioteca común aviso-version-github, en su versión 0.2.3 y copiada entera en la carpeta bibliotecas, consulta en GitHub si hay una versión nueva. La usan el núcleo, para los ajustes, y la interfaz, que es la que hace la consulta. La biblioteca común deteccion-agentes, en su versión 0.2.0 y copiada también en esa carpeta, encuentra las cuentas de Claude Code, Codex y agy que hay en el equipo. La usan el núcleo, que busca las cuentas, y el lanzador, que abre cada una con su ajuste de entorno.
 
 La versión se declara en un solo sitio, el Cargo.toml de la raíz, y sigue Semantic Versioning.
 
@@ -129,6 +135,6 @@ Saludos a todo el mundo.
 
 Licencia
 
-Gestor Agentes es software libre, publicado con la licencia GPL-3.0 o posterior. El texto íntegro está en el archivo LICENSE, y el paquete portable lo lleva como Licencia.txt en su carpeta documentacion.
+Gestor Agentes es software libre, publicado con la licencia GPL-3.0 o posterior. El texto íntegro está en el archivo LICENSE, y el paquete portable lo lleva como Licencia.txt en su carpeta documentacion. El aviso de versión nueva usa la biblioteca aviso-version-github, del mismo autor y con la misma licencia, incluida en la carpeta bibliotecas, y la búsqueda de las cuentas de los agentes usa la biblioteca deteccion-agentes, del mismo autor, con la misma licencia y en la misma carpeta, que solo usa la biblioteca estándar de Rust. Según sus manifiestos, sus dependencias de red tienen licencias permisivas: ureq es MIT o Apache-2.0; rustls, Apache-2.0, MIT o ISC; webpki-roots, CDLA-Permissive-2.0; y winreg, que solo se usa en Windows, MIT.
 
 En corto: puedes usar el programa para lo que quieras, estudiar cómo funciona por dentro, modificarlo y repartirlo. La única condición es que si repartes una versión modificada, publiques también su código, con esta misma licencia.

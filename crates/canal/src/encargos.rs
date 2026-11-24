@@ -16,11 +16,11 @@ use crate::huella;
 use crate::identidad::Identidad;
 
 /// Palabra que abre un encargo.
-const PALABRA_DEL_ENCARGO: &str = "Para ";
+pub(crate) const PALABRA_DEL_ENCARGO: &str = "Para ";
 /// Marca con la que empieza cada intervención de una bandeja.
 const MARCA_DE_LATIDO: &str = "LATIDO:";
 /// Caracteres que cierran la lista de destinatarios.
-const FIN_DE_LISTA: [char; 4] = [':', ';', '.', '—'];
+pub(crate) const FIN_DE_LISTA: [char; 4] = [':', ';', '.', '—'];
 /// Separadores de destinatarios dentro de la lista, además de la coma.
 const CONJUNCIONES: [&str; 2] = [" y ", " e "];
 

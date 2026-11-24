@@ -7,10 +7,10 @@
 use std::process::ExitCode;
 
 use eframe::egui;
-use gestor_agentes::actualizaciones::{self, Consulta};
 use gestor_agentes::arranque;
+use gestor_agentes::aviso_de_version::{self, Avisar, AvisosAlArrancar, VERSION_INSTALADA};
 use gestor_agentes::icono;
-use gestor_agentes::sistema::{ConsultorGithub, MotorReal, ServiciosReales};
+use gestor_agentes::sistema::{MotorReal, ServiciosReales};
 use gestor_agentes::tema;
 use gestor_agentes::textos;
 use gestor_agentes::trabajos::Trabajador;
@@ -38,8 +38,7 @@ fn main() -> ExitCode {
 fn abrir() -> Result<(), Box<dyn std::error::Error>> {
     let configuracion = Configuracion::new(arranque::carpeta_de_datos()?);
     let ajustes = configuracion.cargar_ajustes()?;
-    let consulta = Consulta::desde(&ajustes);
-    let consulta_de_programator = Consulta::de_programator(&ajustes);
+    let ajustes_del_aviso = ajustes.clone();
     let aplicacion = arranque::estado_inicial(
         &configuracion,
         Box::new(ServiciosReales::new(configuracion.clone())),
@@ -66,29 +65,28 @@ fn abrir() -> Result<(), Box<dyn std::error::Error>> {
         opciones,
         Box::new(move |creacion| {
             tema::aplicar(&creacion.egui_ctx);
-            let contexto = creacion.egui_ctx.clone();
             let trabajador = Trabajador::arrancar(
                 Box::new(MotorReal::new(configuracion, ajustes)),
-                Box::new(move || contexto.request_repaint()),
+                repintar(&creacion.egui_ctx),
             )?;
-            let contexto = creacion.egui_ctx.clone();
-            let avisos = actualizaciones::en_segundo_plano(
-                consulta,
-                Box::new(ConsultorGithub),
-                Box::new(move || contexto.request_repaint()),
-            );
-            let contexto = creacion.egui_ctx.clone();
-            let programator = actualizaciones::programator_en_segundo_plano(
-                consulta_de_programator,
-                Box::new(ConsultorGithub),
-                Box::new(move || contexto.request_repaint()),
+            let avisos = AvisosAlArrancar::arrancar(
+                &ajustes_del_aviso,
+                VERSION_INSTALADA,
+                aviso_de_version::consulta_real,
+                &aviso_de_version::registro_real(),
+                || repintar(&creacion.egui_ctx),
             );
             Ok(Box::new(
                 Ventana::new(aplicacion, trabajador, nucleo::plantillas::nucleo_comun())
-                    .con_avisos_de_version(avisos)
-                    .con_avisos_de_programator(programator),
+                    .con_avisos(avisos),
             ))
         }),
     )?;
     Ok(())
+}
+
+/// Lo que pide a la ventana que se vuelva a pintar cuando llega un resultado de otro hilo.
+fn repintar(contexto: &egui::Context) -> Avisar {
+    let contexto = contexto.clone();
+    Box::new(move || contexto.request_repaint())
 }

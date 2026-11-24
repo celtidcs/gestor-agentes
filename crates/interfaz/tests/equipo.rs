@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use chrono::NaiveDateTime;
-use gestor_agentes::aplicacion::{Aplicacion, Servicios};
+use gestor_agentes::aplicacion::Aplicacion;
 use gestor_agentes::textos;
 use gestor_agentes::trabajos::ResultadoDeTrabajo;
 use nucleo::configuracion::{ErrorDeConfiguracion, PerfilDeAgente, ProyectoRegistrado};
@@ -49,33 +49,42 @@ struct ServiciosDelEquipo {
     lecturas: Rc<Cell<u32>>,
 }
 
-impl Servicios for ServiciosDelEquipo {
+impl gestor_agentes::aplicacion::AlmacenDeConfiguracion for ServiciosDelEquipo {
     fn guardar_proyectos(&self, _: &[ProyectoRegistrado]) -> Result<(), ErrorDeConfiguracion> {
         Ok(())
     }
-    fn estado_del_proyecto(&self, _: &Path) -> EstadoDelProyecto {
-        EstadoDelProyecto::Configurado
+    fn guardar_perfiles(&self, _: &[PerfilDeAgente]) -> Result<(), ErrorDeConfiguracion> {
+        Ok(())
     }
-    fn existe_carpeta(&self, _: &Path) -> bool {
-        true
+    fn ruta_perfiles(&self) -> PathBuf {
+        PathBuf::from("/datos/perfiles-agentes.json")
     }
+}
+
+impl gestor_agentes::aplicacion::RelojDeInterfaz for ServiciosDelEquipo {
     fn ahora(&self) -> String {
         "2026-11-13T12:00:00+01:00".to_owned()
     }
     fn mostrar_fecha(&self, iso: &str) -> String {
         iso.to_owned()
     }
-    fn ruta_perfiles(&self) -> PathBuf {
-        PathBuf::from("/datos/perfiles-agentes.json")
-    }
-    fn guardar_perfiles(&self, _: &[PerfilDeAgente]) -> Result<(), ErrorDeConfiguracion> {
-        Ok(())
+}
+
+impl gestor_agentes::aplicacion::DiscoDeInterfaz for ServiciosDelEquipo {
+    fn existe_carpeta(&self, _: &Path) -> bool {
+        true
     }
     fn existe_archivo(&self, _: &Path) -> bool {
         true
     }
     fn carpeta_personal(&self) -> Option<PathBuf> {
         None
+    }
+}
+
+impl gestor_agentes::aplicacion::InspectorDeProyecto for ServiciosDelEquipo {
+    fn estado_del_proyecto(&self, _: &Path) -> EstadoDelProyecto {
+        EstadoDelProyecto::Configurado
     }
     fn equipo_del_proyecto(&self, carpeta: &Path) -> Option<(ResumenDelEquipo, NaiveDateTime)> {
         self.lecturas.set(self.lecturas.get() + 1);

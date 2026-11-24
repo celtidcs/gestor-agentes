@@ -1,5 +1,7 @@
-//! Barreras del aviso de versión: versión SemVer, lectura de la respuesta de GitHub,
-//! validación del enlace, decisión de avisar y ajustes de la consulta. Sin red.
+//! Barreras del aviso de versión en el núcleo: lo que Gestor Agentes toma de la biblioteca común
+//! aviso-version-github (versión SemVer y repositorio válido) y los ajustes de la consulta. La
+//! decisión de avisar, el enlace y la última versión de Programator se prueban en la interfaz,
+//! sobre el módulo aviso_de_version y con una consulta falsa. Sin red.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)]
 
@@ -8,36 +10,26 @@ mod comun;
 use std::time::Duration;
 
 use comun::CarpetaTemporal;
-use nucleo::actualizaciones::{self, Publicacion, Version};
+use nucleo::actualizaciones::{self, Version};
 use nucleo::ajustes::Ajustes;
 use nucleo::configuracion::{Configuracion, ErrorDeConfiguracion};
 
 const REPOSITORIO: &str = "celtidcs/gestor-agentes";
 
-/// Respuesta como la de la API de GitHub, reducida a lo que se lee y con un campo de más.
-fn respuesta(etiqueta: &str, enlace: &str) -> String {
-    format!(
-        "{{\"tag_name\": \"{etiqueta}\", \"html_url\": \"{enlace}\", \"name\": \"Gestor Agentes\", \"draft\": false}}"
-    )
-}
-
-fn enlace(etiqueta: &str) -> String {
-    format!("https://github.com/{REPOSITORIO}/releases/tag/{etiqueta}")
-}
-
-fn publicacion(etiqueta: &str) -> Option<Publicacion> {
-    actualizaciones::leer_publicacion(&respuesta(etiqueta, &enlace(etiqueta)), REPOSITORIO)
-}
-
 #[test]
 fn la_version_se_lee_con_o_sin_v_y_se_ordena_como_semver() {
-    assert_eq!(Version::leer("v3.1.0"), Version::leer("3.1.0"));
     assert_eq!(
-        Version::leer("3.10.0").map(|v| v.to_string()).as_deref(),
+        Version::desde_etiqueta("v3.1.0"),
+        Version::desde_etiqueta("3.1.0")
+    );
+    assert_eq!(
+        Version::desde_etiqueta("3.10.0")
+            .map(|v| v.to_string())
+            .as_deref(),
         Some("3.10.0")
     );
-    assert!(Version::leer("3.10.0") > Version::leer("3.9.9"));
-    assert!(Version::leer("4.0.0") > Version::leer("3.99.99"));
+    assert!(Version::desde_etiqueta("3.10.0") > Version::desde_etiqueta("3.9.9"));
+    assert!(Version::desde_etiqueta("4.0.0") > Version::desde_etiqueta("3.99.99"));
     for mala in [
         "",
         "3.1",
@@ -48,73 +40,14 @@ fn la_version_se_lee_con_o_sin_v_y_se_ordena_como_semver() {
         "3..1",
         " 3.1.0 x",
     ] {
-        assert_eq!(Version::leer(mala), None, "{mala:?}");
+        assert_eq!(Version::desde_etiqueta(mala), None, "{mala:?}");
     }
 }
 
 #[test]
-fn se_avisa_solo_de_una_version_mas_nueva() {
-    let nueva = actualizaciones::novedad("3.1.0", publicacion("v3.2.0"));
-    assert_eq!(
-        nueva.map(|p| (p.version.to_string(), p.enlace)),
-        Some(("3.2.0".to_owned(), enlace("v3.2.0")))
-    );
-    for igual_o_vieja in ["v3.1.0", "v3.0.0", "v2.9.9"] {
-        assert_eq!(
-            actualizaciones::novedad("3.1.0", publicacion(igual_o_vieja)),
-            None,
-            "{igual_o_vieja}"
-        );
-    }
-    assert_eq!(
-        actualizaciones::novedad("no es versión", publicacion("v9.0.0")),
-        None
-    );
-    assert_eq!(actualizaciones::novedad("3.1.0", None), None);
-}
-
-#[test]
-fn una_respuesta_rara_no_da_publicacion() {
-    for json in [
-        String::new(),
-        "no es JSON".to_owned(),
-        "{\"message\": \"Not Found\"}".to_owned(),
-        respuesta("v3.2.0-beta", &enlace("v3.2.0-beta")),
-    ] {
-        assert_eq!(
-            actualizaciones::leer_publicacion(&json, REPOSITORIO),
-            None,
-            "{json}"
-        );
-    }
-}
-
-#[test]
-fn solo_se_acepta_un_enlace_del_propio_repositorio_en_github() {
-    for ajeno in [
-        "https://ejemplo.com/celtidcs/gestor-agentes/releases/tag/v9.0.0",
-        "http://github.com/celtidcs/gestor-agentes/releases/tag/v9.0.0",
-        "https://github.com/otro/gestor-agentes/releases/tag/v9.0.0",
-        "https://github.com/celtidcs/gestor-agentes-falso/releases/tag/v9.0.0",
-    ] {
-        assert_eq!(
-            actualizaciones::leer_publicacion(&respuesta("v9.0.0", ajeno), REPOSITORIO),
-            None,
-            "{ajeno}"
-        );
-    }
-}
-
-#[test]
-fn la_consulta_va_a_la_api_de_releases_con_un_agente_de_usuario_generico() {
-    assert_eq!(
-        actualizaciones::direccion_de_la_consulta(REPOSITORIO).as_deref(),
-        Some("https://api.github.com/repos/celtidcs/gestor-agentes/releases/latest")
-    );
-    assert_eq!(
-        actualizaciones::agente_de_usuario("3.1.0"),
-        "gestor-agentes/3.1.0"
-    );
+fn solo_vale_un_repositorio_propietario_nombre() {
+    assert!(actualizaciones::repositorio_valido(REPOSITORIO));
+    assert!(actualizaciones::repositorio_valido("celtidcs/Programator"));
     for malo in [
         "",
         "celtidcs",
@@ -123,10 +56,20 @@ fn la_consulta_va_a_la_api_de_releases_con_un_agente_de_usuario_generico() {
         "a/b/c",
         "a b/c",
         "a/../c?x",
+        "a/.oculto",
     ] {
         assert!(!actualizaciones::repositorio_valido(malo), "{malo:?}");
-        assert_eq!(actualizaciones::direccion_de_la_consulta(malo), None);
     }
+}
+
+#[test]
+fn los_ajustes_de_la_biblioteca_llevan_el_repositorio_y_el_tiempo_de_gestor() {
+    let ajustes = actualizaciones::ajustes_de_version(REPOSITORIO, 7);
+
+    assert_eq!(ajustes.repositorio, REPOSITORIO);
+    assert_eq!(ajustes.segundos_de_espera, 7);
+    assert_eq!(ajustes.url_api, "https://api.github.com");
+    assert_eq!(ajustes.url_web, "https://github.com");
 }
 
 #[test]
@@ -160,6 +103,10 @@ fn un_repositorio_mal_escrito_o_un_tiempo_cero_se_rechazan() {
         (
             "{\"RepositorioDeActualizaciones\": \"no-vale\"}",
             "RepositorioDeActualizaciones",
+        ),
+        (
+            "{\"RepositorioDeProgramator\": \"no-vale\"}",
+            "RepositorioDeProgramator",
         ),
         (
             "{\"TiempoMaximoActualizacionSegundos\": 0}",

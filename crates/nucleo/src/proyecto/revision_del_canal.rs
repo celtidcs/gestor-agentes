@@ -8,29 +8,21 @@
 //! señales. Las líneas de reserva siguen el formato de la plantilla de estado.md:
 //! `- <Agente>, <fecha hora>: <ruta>[, <ruta>…] — <motivo>`.
 
+use canal::apartados;
 use chrono::NaiveDateTime;
+
+use super::papeles::{self, APARTADO_PAPELES};
 
 /// Apartados que estado.md tiene que tener, tal como los escribe su plantilla.
 pub const APARTADOS_OBLIGATORIOS: [&str; 3] =
-    ["## Papeles", "## Reservas activas", "## Mutaciones vivas"];
+    [APARTADO_PAPELES, APARTADO_RESERVAS, APARTADO_MUTACIONES];
 
-/// Apartado de los papeles del equipo.
-const APARTADO_PAPELES: &str = "## Papeles";
 /// Apartado de las reservas de archivos.
 const APARTADO_RESERVAS: &str = "## Reservas activas";
 /// Apartado de las mutaciones de control aplicadas.
-const APARTADO_MUTACIONES: &str = "## Mutaciones vivas";
+const APARTADO_MUTACIONES: &str = canal::mutaciones::TITULO;
 /// Apartado de las autoexclusiones de funciones.
 const APARTADO_AUTOEXCLUSIONES: &str = "## Autoexclusiones vigentes";
-
-/// Principio de la línea del Jefe en el apartado de papeles de la plantilla.
-const LINEA_DEL_JEFE: &str = "- Jefe de proyecto:";
-
-/// Lo que sigue al Jefe en la plantilla cuando todavía no hay ninguno.
-const JEFE_SIN_ASIGNAR: &str = "sin asignar";
-
-/// Marca con la que empieza cada intervención de una bandeja.
-const MARCA_DE_LATIDO: &str = "LATIDO:";
 
 /// Formatos de fecha y hora que se aceptan tras la marca de latido: con y sin segundos.
 const FORMATOS_DE_LATIDO: [&str; 2] = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"];
@@ -158,15 +150,8 @@ pub fn revisar(
 /// Resume el equipo del proyecto a partir de estado.md y de las bandejas.
 #[must_use]
 pub fn resumir(estado: &str, bandejas: &[Bandeja]) -> ResumenDelEquipo {
-    let jefe = apartado_de(estado, APARTADO_PAPELES).and_then(|lineas| {
-        lineas
-            .iter()
-            .find_map(|l| l.strip_prefix(LINEA_DEL_JEFE))
-            .map(|resto| resto.trim().trim_end_matches('.').to_owned())
-            .filter(|jefe| !jefe.is_empty() && !jefe.starts_with(JEFE_SIN_ASIGNAR))
-    });
     ResumenDelEquipo {
-        jefe,
+        jefe: papeles::jefe_vigente(estado),
         latidos: latidos(bandejas),
         reservas: leer_reservas(estado).0.len(),
         mutaciones_vivas: hay_contenido(estado, APARTADO_MUTACIONES),
@@ -179,23 +164,9 @@ pub fn resumir(estado: &str, bandejas: &[Bandeja]) -> ResumenDelEquipo {
 /// «Codex», «codex». Nada si el nombre no tiene esa forma.
 #[must_use]
 pub fn identificador_de(nombre: &str) -> Option<String> {
-    let mut partes = nombre.split_whitespace();
-    let herramienta = partes.next()?.to_lowercase();
-    if !herramienta.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return None;
-    }
-    let numero = match partes.next() {
-        Some(texto) => texto.parse::<u32>().ok().filter(|n| *n >= 1)?,
-        None => 1,
-    };
-    if partes.next().is_some() {
-        return None;
-    }
-    Some(if numero == 1 {
-        herramienta
-    } else {
-        format!("{herramienta}{numero}")
-    })
+    canal::identidad::Identidad::leer(nombre)
+        .ok()
+        .map(|identidad| identidad.nombre_de_archivos())
 }
 
 /// Último latido legible de cada bandeja, por orden de nombre.
@@ -217,7 +188,8 @@ pub fn latidos(bandejas: &[Bandeja]) -> Vec<Latido> {
 
 /// Fecha y hora de una línea «LATIDO: <fecha hora>», si la tiene.
 pub(crate) fn latido_de(linea: &str) -> Option<NaiveDateTime> {
-    let resto = linea.trim().strip_prefix(MARCA_DE_LATIDO)?.trim();
+    let resto = canal::encargos::latido_de(linea)?;
+    let resto = resto.as_str();
     FORMATOS_DE_LATIDO.iter().find_map(|formato| {
         // La hora puede ir seguida de texto: se prueba con los caracteres justos de cada formato.
         let largo = resto
@@ -235,18 +207,9 @@ fn longitud_de(formato: &str) -> usize {
     formato.len() + 2
 }
 
-/// Líneas del apartado `titulo` de estado.md, sin el título, o nada si no está. Acaba en el
-/// siguiente título, aunque lleve espacios delante, como el apartado de mutaciones del crate canal.
+/// Líneas con contenido del apartado `titulo` de estado.md, o nada si no está.
 fn apartado_de<'a>(estado: &'a str, titulo: &str) -> Option<Vec<&'a str>> {
-    let mut lineas = estado.lines();
-    lineas.find(|l| l.trim() == titulo)?;
-    Some(
-        lineas
-            .take_while(|l| !l.trim_start().starts_with('#'))
-            .map(str::trim)
-            .filter(|l| !l.is_empty())
-            .collect(),
-    )
+    apartados::lineas(estado, titulo)
 }
 
 /// Si el apartado existe y dice algo distinto de «Ninguna.».

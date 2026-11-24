@@ -7,7 +7,7 @@ use std::path::Path;
 
 use super::archivos;
 use super::informe::{InformeDeInicializacion, TipoDeCambio};
-use crate::agentes::{IdentidadAgente, CARPETA_CANAL, CARPETA_GESTOR};
+use crate::agentes::{IdentidadAgente, CARPETA_GESTOR};
 use crate::plantillas::{self, EsqueletoGestor};
 
 /// Asegura la estructura de .gestor/ para las identidades indicadas, en este orden: crea
@@ -24,7 +24,7 @@ pub fn asegurar(
 ) -> io::Result<()> {
     crear(
         raiz,
-        &format!("{CARPETA_CANAL}/estado.md"),
+        &canal::contrato::ruta_relativa_del_estado(),
         &plantillas::esqueleto_gestor(EsqueletoGestor::Estado, None),
         informe,
     )?;

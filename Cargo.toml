@@ -1,17 +1,24 @@
-# Workspace de Gestor Agentes 3.0.0, la reescritura en Rust de Gestor Claude.
+# Espacio de trabajo de Gestor Agentes. La versión del producto está más abajo, en
+# workspace.package, y es la única que vale.
 #
-# Tres crates, cada uno con una sola responsabilidad:
+# Cinco crates, cada uno con una sola responsabilidad, y una biblioteca común:
+# - canal: lectura del canal de los agentes y los nombres que comparten los demás, sin dependencias.
 # - nucleo: toda la lógica de preparación de proyectos, sin interfaz ni dependencias de plataforma.
 # - lanzador: decide y ejecuta cómo se abre cada agente en cada sistema operativo.
-# - interfaz: la ventana (eframe y egui); solo presenta y llama a los otros dos.
+# - vigilante: el ejecutable gestor-vigilante que avisa a cada agente de lo nuevo en el canal.
+# - interfaz: la ventana (eframe y egui); solo presenta y llama a los demás.
+# - bibliotecas/aviso-version-github: el aviso de versión nueva compartido con otros programas.
+# - bibliotecas/deteccion-agentes: la búsqueda de las cuentas de los agentes, compartida con otros programas.
 
 [workspace]
 resolver = "2"
-members = ["crates/canal", "crates/nucleo", "crates/lanzador", "crates/vigilante", "crates/interfaz"]
+# bibliotecas/aviso-version-github y bibliotecas/deteccion-agentes son bibliotecas comunes, copias
+# exactas compartidas con otros programas; son miembros para que las puertas pasen también por ellas.
+members = ["crates/canal", "crates/nucleo", "crates/lanzador", "crates/vigilante", "crates/interfaz", "bibliotecas/aviso-version-github", "bibliotecas/deteccion-agentes"]
 
 [workspace.package]
 # Única fuente de la versión del producto (SemVer). Los crates la heredan.
-version = "3.7.0"
+version = "3.9.1"
 edition = "2021"
 license = "GPL-3.0-or-later"
 publish = false

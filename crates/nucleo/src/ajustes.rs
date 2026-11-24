@@ -34,7 +34,7 @@ pub const COMPROBAR_ACTUALIZACIONES_POR_DEFECTO: bool = true;
 pub const REPOSITORIO_DE_ACTUALIZACIONES_POR_DEFECTO: &str = "celtidcs/gestor-agentes";
 
 /// Repositorio público donde se publican las versiones de Programator, con el que se compara la
-/// versión del Programator de la ruta (F7).
+/// versión del Programator de la ruta.
 pub const REPOSITORIO_DE_PROGRAMATOR_POR_DEFECTO: &str = "celtidcs/Programator";
 
 /// Segundos que se espera a GitHub por defecto. La consulta va en su propio hilo y no retrasa
@@ -152,10 +152,11 @@ impl Ajustes {
         if self.tiempo_maximo_actualizacion_segundos == 0 {
             return Err(textos::AJUSTE_TIEMPO_ACTUALIZACION_CERO);
         }
-        if !actualizaciones::repositorio_valido(&self.repositorio_de_actualizaciones)
-            || !actualizaciones::repositorio_valido(&self.repositorio_de_programator)
-        {
+        if !actualizaciones::repositorio_valido(&self.repositorio_de_actualizaciones) {
             return Err(textos::AJUSTE_REPOSITORIO_INVALIDO);
+        }
+        if !actualizaciones::repositorio_valido(&self.repositorio_de_programator) {
+            return Err(textos::AJUSTE_REPOSITORIO_DE_PROGRAMATOR_INVALIDO);
         }
         Ok(self)
     }

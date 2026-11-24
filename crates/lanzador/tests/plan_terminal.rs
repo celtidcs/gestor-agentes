@@ -20,7 +20,7 @@ mod comun;
 use std::path::{Path, PathBuf};
 
 use comun::{guion_bash, guion_powershell, peticion, plan, textos, EntornoDeEnsayo, PROYECTO_AGY};
-use lanzador::{ErrorDeLanzamiento, Herramienta, PlanDeLanzamiento, Sistema};
+use lanzador::{AjusteDeEntorno, ErrorDeLanzamiento, Herramienta, PlanDeLanzamiento, Sistema};
 
 /// Parte fija del guion de PowerShell, igual que en el de Claude: título y temporizador que lo
 /// restaura.
@@ -59,7 +59,10 @@ fn es_de_terminal(plan: &PlanDeLanzamiento, carpeta: &Path) {
 fn peticion_codex() -> lanzador::PeticionDeLanzamiento {
     let mut p = peticion(Herramienta::Codex);
     p.identidad = "Codex 2".to_owned();
-    p.directorio_configuracion = Some(PathBuf::from("/cfg/codex2"));
+    p.ajuste_de_entorno = Some(AjusteDeEntorno::Poner {
+        variable: "CODEX_HOME",
+        valor: PathBuf::from("/cfg/codex2"),
+    });
     p.argumentos_extra = vec!["-c".to_owned(), "project_doc_max_bytes=65536".to_owned()];
     p
 }
@@ -126,7 +129,7 @@ fn codex_terminal_en_linux_va_en_el_emulador_con_identidad_codex_home_y_argument
 #[test]
 fn codex_terminal_sin_carpeta_de_configuracion_no_fija_codex_home() {
     let mut p = peticion_codex();
-    p.directorio_configuracion = None;
+    p.ajuste_de_entorno = None;
     p.ejecutable = Some(PathBuf::from("/bin/codex"));
     let entorno = EntornoDeEnsayo::default().con_archivo("/bin/codex");
     let windows = plan(&p, Sistema::Windows, &entorno);
@@ -188,7 +191,10 @@ fn codex_terminal_sin_programa_no_se_encuentra() {
 fn peticion_agy() -> lanzador::PeticionDeLanzamiento {
     let mut p = peticion(Herramienta::Gemini);
     p.identidad = "Gemini 1".to_owned();
-    p.directorio_configuracion = Some(PathBuf::from("/cfg/no-se-usa"));
+    p.ajuste_de_entorno = Some(AjusteDeEntorno::Poner {
+        variable: "CODEX_HOME",
+        valor: PathBuf::from("/cfg/no-se-usa"),
+    });
     p.argumentos_extra = vec![
         "--model".to_owned(),
         "modelo-de-prueba".to_owned(),
@@ -487,4 +493,21 @@ fn el_titulo_no_se_restaura_con_un_bloque_de_powershell_en_otro_hilo() {
         .expect("para el temporizador");
     let programa = guion.find("/bin/codex").expect("abre el programa");
     assert!(fijar < programa && programa < parar, "{guion}");
+}
+
+/// La cuenta por defecto de Codex se abre quitando CODEX_HOME.
+#[test]
+fn codex_cuenta_por_defecto_quita_codex_home() {
+    let mut p = peticion_codex();
+    p.ajuste_de_entorno = Some(AjusteDeEntorno::Quitar {
+        variable: "CODEX_HOME",
+    });
+    p.ejecutable = Some(PathBuf::from("/bin/codex"));
+    let entorno = EntornoDeEnsayo::default().con_archivo("/bin/codex");
+    let windows = plan(&p, Sistema::Windows, &entorno);
+    let linux = plan(&p, Sistema::Linux, &entorno);
+    assert!(guion_powershell(&windows)
+        .contains("Remove-Item -LiteralPath 'Env:CODEX_HOME' -ErrorAction SilentlyContinue; "));
+    assert!(guion_bash(&linux).starts_with("unset CODEX_HOME; "));
+    assert!(windows.carpetas_a_crear.is_empty());
 }

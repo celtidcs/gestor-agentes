@@ -11,6 +11,11 @@ workspace = true
 
 [dependencies]
 canal = { path = "../canal" }
+# Aviso de versión nueva: biblioteca común, copiada en bibliotecas/.
+aviso-version-github = { path = "../../bibliotecas/aviso-version-github" }
+# Búsqueda de las cuentas de los agentes: biblioteca común, copiada en bibliotecas/. Solo la llama
+# el módulo cuentas_de_agentes.
+deteccion-agentes = { path = "../../bibliotecas/deteccion-agentes" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }

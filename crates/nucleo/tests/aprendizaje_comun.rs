@@ -117,7 +117,7 @@ fn las_candidatas_se_anaden_sin_repetirse() {
 
 #[test]
 fn una_candidata_repetida_en_la_misma_recogida_se_escribe_una_vez() {
-    // Caso G2 de la verificación de Codex 1.
+    // La misma regla dos veces en una recogida.
     let candidatas = vec!["Regla A".to_owned(), "Regla A".to_owned()];
     let texto = aprendizaje::anadir_candidatas(None, &candidatas, "Uno", "2026-11-20").unwrap();
     assert_eq!(
@@ -129,7 +129,7 @@ fn una_candidata_repetida_en_la_misma_recogida_se_escribe_una_vez() {
 
 #[test]
 fn una_candidata_que_es_prefijo_de_otra_ya_anotada_se_anade() {
-    // Caso G2 de la verificación de Codex 1: se compara la regla entera, no una subcadena.
+    // Se compara la regla entera, no una subcadena.
     let previo = aprendizaje::anadir_candidatas(
         None,
         &[
@@ -156,7 +156,7 @@ fn una_candidata_que_es_prefijo_de_otra_ya_anotada_se_anade() {
 
 #[test]
 fn un_proyecto_con_punto_y_parentesis_en_el_nombre_no_duplica_la_candidata() {
-    // Caso G2 de la segunda verificación de Codex 1: el separador no puede aparecer en el nombre.
+    // El separador no puede aparecer en el nombre.
     let candidatas = vec!["Regla A".to_owned()];
     let primera =
         aprendizaje::anadir_candidatas(None, &candidatas, "Gestor. (piloto)", "2026-11-20")

@@ -11,13 +11,17 @@
 //! - [`procesos`]: el árbol de procesos, para terminar cuando muere quien lo lanzó.
 //! - [`entrega`]: cómo se hace llegar el aviso a la sesión de Codex.
 //! - [`vivo`]: el latido de la vigilancia que lee la ventana de Gestor Agentes.
+//! - [`avisos`]: los avisos que esperan su entrega, sin repetir etiquetas ni archivos.
+//! - [`puertos`]: el reloj, la espera y la entrega que usa el modo persistente.
 //! - [`ejecucion`]: los modos, que juntan todo lo anterior.
 
+pub mod avisos;
 pub mod ejecucion;
 pub mod entrega;
 pub mod hilo;
 pub mod opciones;
 pub mod pasada;
 pub mod procesos;
+pub mod puertos;
 pub mod recuerdo;
 pub mod vivo;

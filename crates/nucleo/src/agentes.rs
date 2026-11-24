@@ -9,9 +9,10 @@
 use std::num::NonZeroU32;
 
 /// Carpeta de gestión del proyecto, relativa a su raíz.
-pub const CARPETA_GESTOR: &str = ".gestor";
+pub const CARPETA_GESTOR: &str = canal::contrato::CARPETA_GESTOR;
 
-/// Carpeta del canal de comunicación, relativa a la raíz del proyecto.
+/// Carpeta del canal de comunicación, relativa a la raíz del proyecto. Es la de canal::contrato; la
+/// prueba las_rutas_de_gestor_coinciden_con_el_contrato_del_canal lo comprueba.
 pub const CARPETA_CANAL: &str = ".gestor/canal";
 
 /// Herramienta de agente para la que la aplicación mantiene un archivo de instrucciones canónico

@@ -299,3 +299,161 @@ fn un_encargo_ya_acusado_en_la_bandeja_propia_no_se_avisa() {
     let pendiente = pasada::comparar(&visto, &ahora, &yo, "");
     assert!(pendiente.hay_etiquetas());
 }
+
+fn resultado_con(archivo: &str, encargo: bool, mutacion: bool) -> vigilante::pasada::Resultado {
+    vigilante::pasada::Resultado {
+        cambios: vec![vigilante::pasada::Cambio {
+            archivo: archivo.to_owned(),
+            encargo,
+            mutacion,
+        }],
+        visto: vigilante::pasada::Visto::default(),
+    }
+}
+
+#[test]
+fn un_encargo_y_una_mutacion_juntos_en_una_entrega_conservan_las_dos_etiquetas() {
+    use vigilante::avisos::AvisosPendientes;
+
+    let mut pendientes = AvisosPendientes::default();
+    pendientes.anadir(&resultado_con("claude2.md", true, false));
+    let primera = pendientes
+        .tomar_si_toca(1_000)
+        .expect("la primera entrega va enseguida");
+    assert_eq!(primera.etiquetas, "encargo");
+
+    pendientes.anadir(&resultado_con("claude2.md", true, false));
+    pendientes.anadir(&resultado_con("estado.md", false, true));
+    pendientes.anadir(&resultado_con("claude2.md", true, false));
+    assert!(
+        pendientes.tomar_si_toca(1_010).is_none(),
+        "antes de la cadencia"
+    );
+    let junta = pendientes.tomar_si_toca(1_030).expect("pasada la cadencia");
+    assert_eq!(junta.etiquetas, "encargo,mutacion");
+    assert_eq!(junta.archivos, vec!["claude2.md", "estado.md"]);
+    assert!(pendientes.esta_vacio());
+    assert!(pendientes.tomar_si_toca(2_000).is_none(), "nada pendiente");
+}
+
+#[test]
+fn la_respuesta_de_programator_se_etiqueta_como_respuesta_y_no_como_encargo() {
+    let lote = vigilante::avisos::Lote::de_resultado(&resultado_con("programator.md", true, false));
+    assert_eq!(lote.etiquetas, "respuesta");
+}
+
+/// Orden que escribe más de lo que cabe en una tubería (64 KiB en Linux, 4 KiB a 64 KiB en
+/// Windows) y termina.
+fn orden_que_escribe_mucho(bytes: usize) -> std::process::Command {
+    #[cfg(windows)]
+    {
+        let mut orden = std::process::Command::new("powershell");
+        orden.args([
+            "-NoProfile",
+            "-Command",
+            &format!("[Console]::Out.Write(('a' * {bytes}))"),
+        ]);
+        orden
+    }
+    #[cfg(not(windows))]
+    {
+        let mut orden = std::process::Command::new("sh");
+        orden.args(["-c", &format!("head -c {bytes} /dev/zero | tr '\\0' a")]);
+        orden
+    }
+}
+
+#[test]
+fn una_entrega_que_escribe_mucho_no_se_queda_bloqueada_en_la_tuberia() {
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    const BYTES: usize = 300_000;
+    let hijo = orden_que_escribe_mucho(BYTES)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (codigo, salida) =
+        entrega::esperar_salida(hijo, Duration::from_secs(20)).expect("termina a tiempo");
+    assert_eq!(codigo, Some(0));
+    assert!(salida.matches('a').count() >= BYTES, "{}", salida.len());
+}
+
+#[test]
+fn una_entrega_sin_respuesta_dice_cuantos_segundos_espero() {
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    #[cfg(windows)]
+    let mut orden = std::process::Command::new("powershell");
+    #[cfg(windows)]
+    orden.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 30"]);
+    #[cfg(not(windows))]
+    let mut orden = std::process::Command::new("sleep");
+    #[cfg(not(windows))]
+    orden.arg("30");
+    let hijo = orden
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let motivo = entrega::esperar_salida(hijo, Duration::from_secs(1)).unwrap_err();
+    assert_eq!(motivo, "sin respuesta en 1 s");
+}
+
+/// Entregador que anota cada mensaje y responde siempre lo mismo.
+struct EntregadorFalso {
+    mensajes: std::cell::RefCell<Vec<String>>,
+}
+
+impl vigilante::puertos::Entregador for EntregadorFalso {
+    fn entregar(&self, mensaje: &str) -> ResultadoDeEntrega {
+        self.mensajes.borrow_mut().push(mensaje.to_owned());
+        ResultadoDeEntrega::Aceptada
+    }
+}
+
+#[test]
+fn los_avisos_se_entregan_juntos_con_la_cadencia_sin_esperar_de_verdad() {
+    use canal::identidad::Identidad;
+    use vigilante::avisos::{self, AvisosPendientes};
+
+    let yo = Identidad::leer("Codex 1").unwrap();
+    let entregador = EntregadorFalso {
+        mensajes: std::cell::RefCell::new(Vec::new()),
+    };
+    let mut pendientes = AvisosPendientes::default();
+    let mut entregas = Vec::new();
+    // Horas simuladas: un encargo a las 1000, una mutación a las 1010 y otro encargo a las 1020.
+    for (ahora, archivo, encargo, mutacion) in [
+        (1_000, "claude2.md", true, false),
+        (1_010, "estado.md", false, true),
+        (1_020, "claude2.md", true, false),
+        (1_030, "", false, false),
+    ] {
+        if !archivo.is_empty() {
+            pendientes.anadir(&resultado_con(archivo, encargo, mutacion));
+        }
+        if let Some((lote, _)) = avisos::entregar_si_toca(&mut pendientes, ahora, &yo, &entregador)
+        {
+            entregas.push((ahora, lote.etiquetas));
+        }
+    }
+    assert_eq!(
+        entregas,
+        vec![
+            (1_000, String::from("encargo")),
+            (1_030, String::from("encargo,mutacion"))
+        ]
+    );
+    let mensajes = entregador.mensajes.borrow();
+    assert_eq!(mensajes.len(), 2);
+    assert!(
+        mensajes[1].contains(".gestor/canal/estado.md, .gestor/canal/claude2.md"),
+        "{}",
+        mensajes[1]
+    );
+}

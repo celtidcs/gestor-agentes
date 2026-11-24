@@ -1,7 +1,7 @@
 //! Barrera de lo que consta en cada verificación: la consulta de verificación que Gestor escribe
 //! en cada proyecto pide la orden literal con sus horas y su código, todos los criterios, ningún
 //! valor copiado de otro agente, las puertas por manifiesto, las VM en lugar del equipo del
-//! Director y las señales de alarma para quien acepta (orden del Director del 2026-11-03).
+//! Director y las señales de alarma para quien acepta.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)]
 

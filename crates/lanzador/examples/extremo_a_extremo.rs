@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use lanzador::{ejecutar, planificar, EntornoReal, Herramienta, PeticionDeLanzamiento, Sistema};
+use lanzador::{
+    ejecutar, planificar, AjusteDeEntorno, EntornoReal, Herramienta, PeticionDeLanzamiento, Sistema,
+};
 
 /// Identidad de prueba.
 const IDENTIDAD: &str = "Claude 9";
@@ -57,7 +59,10 @@ fn comprobar_en(raiz: &Path) -> Result<(), String> {
         identidad: IDENTIDAD.to_owned(),
         carpeta_proyecto: proyecto.clone(),
         nombre_proyecto: NOMBRE_PROYECTO.to_owned(),
-        directorio_configuracion: Some(configuracion.clone()),
+        ajuste_de_entorno: Some(AjusteDeEntorno::Poner {
+            variable: "CLAUDE_CONFIG_DIR",
+            valor: configuracion.clone(),
+        }),
         ejecutable: Some(guion),
         argumentos_extra: Vec::new(),
         mensaje_inicial: None,

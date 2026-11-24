@@ -8,10 +8,12 @@
 
 use std::path::Path;
 
+use canal::contrato::CARPETA_DE_GEMINI;
+use canal::rutas::{self, Mayusculas};
 use serde_json::Value;
 
 /// Carpeta de los proyectos de agy, relativa a la carpeta personal.
-pub const CARPETA_DE_PROYECTOS: [&str; 3] = [".gemini", "config", "projects"];
+pub const CARPETA_DE_PROYECTOS: [&str; 3] = [CARPETA_DE_GEMINI, "config", "projects"];
 
 /// Prefijo de las direcciones de archivo.
 const ESQUEMA_DE_ARCHIVO: &str = "file://";
@@ -123,13 +125,12 @@ fn descodificar(texto: &str) -> String {
 /// Forma comparable de una ruta: barras normales y sin barra final. Una ruta con letra de unidad
 /// va en minúsculas, porque agy guarda la letra en minúscula y Windows no distingue mayúsculas.
 fn normalizar(ruta: &str) -> String {
-    let ruta = ruta.replace('\\', "/");
-    let ruta = ruta.trim_end_matches('/');
-    if tiene_letra_de_unidad(ruta) {
-        ruta.to_lowercase()
+    let mayusculas = if tiene_letra_de_unidad(ruta) {
+        Mayusculas::NoCuentan
     } else {
-        ruta.to_owned()
-    }
+        Mayusculas::Cuentan
+    };
+    rutas::forma_comparable(ruta, mayusculas)
 }
 
 /// Indica si una ruta empieza por una letra de unidad, como «m:».

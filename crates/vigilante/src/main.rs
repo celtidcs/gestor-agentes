@@ -5,13 +5,11 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use canal::contrato::{CARPETA_CANAL, VARIABLE_DE_IDENTIDAD};
 use canal::identidad::Identidad;
 use vigilante::ejecucion::{self, Contexto, CODIGO_DE_USO};
 use vigilante::opciones;
 use vigilante::procesos::ProcesosDelSistema;
-
-/// Variable con la identidad que pone Gestor Agentes al lanzar cada agente.
-const VARIABLE_DE_IDENTIDAD: &str = "GESTOR_AGENTE";
 
 fn main() -> ExitCode {
     let argumentos: Vec<String> = std::env::args().skip(1).collect();
@@ -51,8 +49,9 @@ fn preparar(argumentos: &[String]) -> Result<(Contexto, opciones::Opciones), Str
         Some(gestor) => gestor,
         None => carpeta_gestor_del_ejecutable()?,
     };
-    if !gestor.join("canal").is_dir() {
-        return Err(format!("no existe {}", gestor.join("canal").display()));
+    let canal = gestor.join(CARPETA_CANAL);
+    if !canal.is_dir() {
+        return Err(format!("no existe {}", canal.display()));
     }
     Ok((Contexto { gestor, identidad }, opciones))
 }

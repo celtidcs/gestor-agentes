@@ -15,7 +15,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use lanzador::{ejecutar, planificar, EntornoReal, Herramienta, PeticionDeLanzamiento, Sistema};
+use lanzador::{
+    ejecutar, planificar, AjusteDeEntorno, EntornoReal, Herramienta, PeticionDeLanzamiento, Sistema,
+};
 
 /// Nombre de la carpeta del proyecto: espacios, acentos, comillas rectas y tipográficas, punto y
 /// coma y $, para que la prueba pase también por los escapes.
@@ -111,7 +113,10 @@ fn comprobar_en(raiz: &Path, caso: &Caso) -> Result<(), String> {
         identidad: caso.identidad.to_owned(),
         carpeta_proyecto: proyecto.clone(),
         nombre_proyecto: NOMBRE_PROYECTO.to_owned(),
-        directorio_configuracion: caso.con_codex_home.then(|| configuracion.clone()),
+        ajuste_de_entorno: caso.con_codex_home.then(|| AjusteDeEntorno::Poner {
+            variable: "CODEX_HOME",
+            valor: configuracion.clone(),
+        }),
         ejecutable: Some(guion),
         argumentos_extra: caso.argumentos.clone(),
         mensaje_inicial: None,

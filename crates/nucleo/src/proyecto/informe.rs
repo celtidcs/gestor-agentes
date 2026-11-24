@@ -20,6 +20,9 @@ pub enum TipoDeCambio {
     RepositorioCreado,
     /// Se ha borrado algo que la aplicación dejó en una versión anterior y ya no se usa.
     Borrado,
+    /// Un archivo fuera del proyecto se ha sustituido por otro, guardando antes una copia, como el
+    /// estado de la cuenta por defecto de Claude Code en la migración de la 3.9.0.
+    Sustituido,
 }
 
 impl TipoDeCambio {
@@ -34,12 +37,16 @@ impl TipoDeCambio {
             Self::Respaldado => textos::CAMBIO_RESPALDADO,
             Self::RepositorioCreado => textos::CAMBIO_REPOSITORIO_CREADO,
             Self::Borrado => textos::CAMBIO_BORRADO,
+            Self::Sustituido => textos::CAMBIO_SUSTITUIDO,
         }
     }
 
     /// Los cambios que el usuario debe revisar aunque todo haya ido bien.
     const fn requiere_atencion(self) -> bool {
-        matches!(self, Self::Migrado | Self::Respaldado | Self::Archivado)
+        matches!(
+            self,
+            Self::Migrado | Self::Respaldado | Self::Archivado | Self::Sustituido
+        )
     }
 }
 
